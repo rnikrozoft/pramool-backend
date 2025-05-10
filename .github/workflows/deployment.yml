@@ -24,6 +24,9 @@ jobs:
       run: |
         docker save pramool-backend:latest -o pramool-backend.tar
 
+    - name: List files
+      run: ls -la
+      
     - name: Copy image and docker-compose to VPS
       uses: appleboy/scp-action@v0.1.4
       with:
@@ -34,6 +37,7 @@ jobs:
           docker-compose.yml
           pramool-backend.tar
         target: "~/pramool"
+        
 
     - name: Load image and run docker-compose on VPS
       uses: appleboy/ssh-action@v1.0.0
