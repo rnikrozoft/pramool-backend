@@ -26,16 +26,14 @@ jobs:
 
     - name: List files
       run: ls -la
-      
+
     - name: Copy image and docker-compose to VPS
       uses: appleboy/scp-action@v0.1.4
       with:
         host: ${{ secrets.VPS_HOST }}
         username: ${{ secrets.VPS_USER }}
         key: ${{ secrets.VPS_SSH_KEY }}
-        source: |
-          docker-compose.yml
-          pramool-backend.tar
+        source: "docker-compose.yml,pramool-backend.tar"
         target: "~/pramool"
         
 
