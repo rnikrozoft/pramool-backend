@@ -18,33 +18,33 @@ jobs:
 
     - name: Build Docker image
       run: |
-        docker build -t ${{ secrets.REGISTRY }}/pramool-backend:latest .
+        docker build -t pramool-backend:latest .
 
-    - name: Copy image to VPS (save image to tarball)
+    - name: Save image to tarball
       run: |
-        docker save ${{ secrets.REGISTRY }}/pramool-backend:latest -o pramool-backend.tar
+        docker save pramool-backend:latest -o pramool-backend.tar
 
-    - name: Send image to VPS
+    - name: Copy image and docker-compose to VPS
       uses: appleboy/scp-action@v0.1.4
       with:
         host: ${{ secrets.VPS_HOST }}
         username: ${{ secrets.VPS_USER }}
         key: ${{ secrets.VPS_SSH_KEY }}
-        source: "pramool-backend.tar"
-        target: "~/"
+        source: |
+          docker-compose.yml
+          pramool-backend.tar
+        target: "~/pramool"
 
-    - name: Load image on VPS and restart container
+    - name: Load image and run docker-compose on VPS
       uses: appleboy/ssh-action@v1.0.0
       with:
         host: ${{ secrets.VPS_HOST }}
         username: ${{ secrets.VPS_USER }}
         key: ${{ secrets.VPS_SSH_KEY }}
         script: |
-          docker load -i ~/pramool-backend.tar
-          docker tag pramool-backend:latest ${{ secrets.REGISTRY }}/pramool-backend:latest
-          docker push ${{ secrets.REGISTRY }}/pramool-backend:latest
-
           cd ~/pramool
+
+          docker load -i pramool-backend.tar
+
           docker-compose down
-          docker-compose pull
-          docker-compose up -d
+          docker-compose up -d --remove-orphans
