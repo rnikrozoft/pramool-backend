@@ -44,5 +44,7 @@ jobs:
           docker tag pramool-backend:latest ${{ secrets.REGISTRY }}/pramool-backend:latest
           docker push ${{ secrets.REGISTRY }}/pramool-backend:latest
 
-          docker rm -f pramool-backend || true
-          docker run -d --name pramool-backend -p 3001:3001 ${{ secrets.REGISTRY }}/pramool-backend:latest
+          cd ~/pramool
+          docker-compose down
+          docker-compose pull
+          docker-compose up -d
