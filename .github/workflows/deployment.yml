@@ -1,0 +1,48 @@
+name: Build and Deploy to Vultr
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v3
+
+    - name: Set up Docker
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build Docker image
+      run: |
+        docker build -t ${{ secrets.REGISTRY }}/pramool-backend:latest .
+
+    - name: Copy image to VPS (save image to tarball)
+      run: |
+        docker save ${{ secrets.REGISTRY }}/pramool-backend:latest -o pramool-backend.tar
+
+    - name: Send image to VPS
+      uses: appleboy/scp-action@v0.1.4
+      with:
+        host: ${{ secrets.VPS_HOST }}
+        username: ${{ secrets.VPS_USER }}
+        key: ${{ secrets.VPS_SSH_KEY }}
+        source: "pramool-backend.tar"
+        target: "~/"
+
+    - name: Load image on VPS and restart container
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.VPS_HOST }}
+        username: ${{ secrets.VPS_USER }}
+        key: ${{ secrets.VPS_SSH_KEY }}
+        script: |
+          docker load -i ~/pramool-backend.tar
+          docker tag pramool-backend:latest ${{ secrets.REGISTRY }}/pramool-backend:latest
+          docker push ${{ secrets.REGISTRY }}/pramool-backend:latest
+
+          docker rm -f pramool-backend || true
+          docker run -d --name pramool-backend -p 3001:3001 ${{ secrets.REGISTRY }}/pramool-backend:latest
