@@ -1,0 +1,54 @@
+basePath: /
+definitions:
+  model.User:
+    properties:
+      email:
+        description: |-
+          UserId    string `json:"user_id" validate:"required,max=13"`
+          FirstName string `json:"first_name" validate:"required,max=20"`
+          LastName  string `json:"last_name" validate:"required,max=20"`
+        maxLength: 255
+        type: string
+      password:
+        maxLength: 255
+        type: string
+    required:
+    - email
+    - password
+    type: object
+host: localhost:3001
+info:
+  contact:
+    email: fiber@swagger.io
+    name: API Support
+  description: This is a sample swagger for Fiber
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+  termsOfService: http://swagger.io/terms/
+  title: Fiber Example API
+  version: "1.0"
+paths:
+  /register:
+    post:
+      consumes:
+      - application/json
+      description: User Register
+      parameters:
+      - description: User data
+        in: body
+        name: user
+        required: true
+        schema:
+          $ref: '#/definitions/model.User'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            type: string
+      summary: Register
+      tags:
+      - User
+swagger: "2.0"

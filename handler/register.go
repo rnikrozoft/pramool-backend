@@ -19,6 +19,15 @@ func NewRegisterHandler(validate *validator.Validate, registerService service.Re
 	}
 }
 
+// Register godoc
+// @Summary      Register
+// @Description  User Register
+// @Tags         User
+// @Accept       json
+// @Produce      json
+// @Param        user  body      model.User  true  "User data"
+// @Success      201   {string}  string      "Created"
+// @Router       /register [post]
 func (h RegisterHandler) Register(c *fiber.Ctx) error {
 	user := new(model.User)
 	if err := c.BodyParser(user); err != nil {
