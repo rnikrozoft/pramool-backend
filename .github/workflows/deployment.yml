@@ -60,7 +60,7 @@ jobs:
         host: ${{ env.VPS_HOST }}
         username: ${{ env.VPS_USER }}
         key: ${{ env.VPS_SSH_KEY }}
-        source: "docker-compose.yml,pramool-backend.tar"
+        source: "docker-compose.yml,pramool-backend.tar,.env"
         target: "~/pramool"
         
 
