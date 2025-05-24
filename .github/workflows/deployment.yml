@@ -26,6 +26,16 @@ jobs:
     steps:
     - name: Checkout Code
       uses: actions/checkout@v3
+    
+    - name: Write .env file
+      run: |
+        echo "DATABASE_HOST=${DATABASE_HOST}" >> .env
+        echo "DATABASE_PORT=${DATABASE_PORT}" >> .env
+        echo "DATABASE_USERNAME=${DATABASE_USERNAME}" >> .env
+        echo "DATABASE_PASSWORD=${DATABASE_PASSWORD}" >> .env
+        echo "DATABASE_NAME=${DATABASE_NAME}" >> .env
+        echo "JWT_SECRET=${JWT_SECRET}" >> .env
+        echo "JWT_EXPIRE_TIME=${JWT_EXPIRE_TIME}" >> .env
 
     - name: Set up Docker
       uses: docker/setup-buildx-action@v3
@@ -37,16 +47,6 @@ jobs:
     - name: Save image to tarball
       run: |
         docker save pramool-backend:latest -o pramool-backend.tar
-
-    - name: Write .env file
-      run: |
-        echo "DATABASE_HOST=${DATABASE_HOST}" >> .env
-        echo "DATABASE_PORT=${DATABASE_PORT}" >> .env
-        echo "DATABASE_USERNAME=${DATABASE_USERNAME}" >> .env
-        echo "DATABASE_PASSWORD=${DATABASE_PASSWORD}" >> .env
-        echo "DATABASE_NAME=${DATABASE_NAME}" >> .env
-        echo "JWT_SECRET=${JWT_SECRET}" >> .env
-        echo "JWT_EXPIRE_TIME=${JWT_EXPIRE_TIME}" >> .env
 
     - name: List files
       run: ls -la
