@@ -1,0 +1,56 @@
+definitions:
+  dto.User:
+    properties:
+      email:
+        maxLength: 255
+        type: string
+      first_name:
+        maxLength: 100
+        type: string
+      last_name:
+        maxLength: 100
+        type: string
+      password:
+        maxLength: 100
+        type: string
+      user_id:
+        maxLength: 13
+        type: string
+    required:
+    - email
+    - first_name
+    - last_name
+    - password
+    - user_id
+    type: object
+  model.RegisterResponse:
+    properties:
+      token:
+        type: string
+    type: object
+info:
+  contact: {}
+paths:
+  /register:
+    post:
+      consumes:
+      - application/json
+      description: User Register
+      parameters:
+      - description: User data
+        in: body
+        name: user
+        required: true
+        schema:
+          $ref: '#/definitions/dto.User'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/model.RegisterResponse'
+      summary: Register
+      tags:
+      - User
+swagger: "2.0"
