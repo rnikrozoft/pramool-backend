@@ -45,9 +45,12 @@ jobs:
 
     - name: List files
       run: ls -la
+    
+    - name: Debug print VPS_HOST
+      run: echo "VPS_HOST=[$VPS_HOST]"
 
     - name: Copy image and docker-compose to VPS
-      uses: appleboy/scp-action@v0.1.4
+      uses: appleboy/scp-action@v1
       with:
         host: ${{ secrets.VPS_HOST }}
         username: ${{ secrets.VPS_USER }}
