@@ -10,13 +10,15 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      HOST: ${{ secrets.DATABASE_HOST }}
-      PORT: ${{ secrets.DATABASE_PORT }}
-      USERNAME: ${{ secrets.DATABASE_USERNAME }}
-      PASSWORD: ${{ secrets.DATABASE_PASSWORD }}
+      DATABASE_HOST: ${{ secrets.DATABASE_HOST }}
+      DATABASE_PORT: ${{ secrets.DATABASE_PORT }}
+      DATABASE_USERNAME: ${{ secrets.DATABASE_USERNAME }}
+      DATABASE_PASSWORD: ${{ secrets.DATABASE_PASSWORD }}
       DATABASE_NAME: ${{ secrets.DATABASE_NAME }}
-      SECRET: ${{ secrets.JWT_SECRET }}
-      EXPIRE_TIME: ${{ secrets.JWT_EXPIRE_TIME }}
+
+      JWT_SECRET: ${{ secrets.JWT_SECRET }}
+      JWT_EXPIRE_TIME: ${{ secrets.JWT_EXPIRE_TIME }}
+
       VPS_HOST: ${{ secrets.VPS_HOST }}
       VPS_USER: ${{ secrets.VPS_USER }}
       VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
@@ -50,7 +52,7 @@ jobs:
       run: ls -la
     
     - name: Debug print VPS_HOST
-      run: echo "VPS_HOST=[env.VPS_HOST]"
+      run: echo "VPS_HOST=[$VPS_HOST]"
 
     - name: Copy image and docker-compose to VPS
       uses: appleboy/scp-action@v1
