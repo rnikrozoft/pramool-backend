@@ -15,6 +15,6 @@ FROM alpine:latest
 WORKDIR /root/
 
 COPY --from=builder /app/main .
-COPY .env .
+COPY .env ./
 
 CMD ["./main","serve"]
