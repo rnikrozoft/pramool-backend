@@ -8,7 +8,7 @@ import (
 )
 
 type Register interface {
-	Register(ctx context.Context, user entity.User) error
+	RegisterUser(ctx context.Context, user entity.User) error
 }
 
 type register struct {
@@ -21,16 +21,26 @@ func NewRegisterRepository(bun *bun.DB) Register {
 	}
 }
 
-func (r register) Register(ctx context.Context, user entity.User) error {
+func (r register) RegisterUser(ctx context.Context, user entity.User) error {
 	query := `
-		INSERT INTO users (
-			user_id, 
-			email, 
-			password,
-			first_name,
-			last_name
-		) VALUES (?, ?, ?, ?, ?)
+	INSERT INTO users (
+		user_id, tel, first_name, last_name, address_primary,
+		address, soi, road, sub_district, district, province, zip_code
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
-	_, err := r.bun.NewRaw(query, user.UserId, user.Email, user.Password, user.FirstName, user.LastName).Exec(ctx)
+	_, err := r.bun.NewRaw(query,
+		user.UserID,
+		user.Tel,
+		user.FirstName,
+		user.LastName,
+		user.AddressPrimary,
+		user.Address,
+		user.Soi,
+		user.Road,
+		user.SubDistrict,
+		user.District,
+		user.Province,
+		user.ZipCode,
+	).Exec(ctx)
 	return err
 }

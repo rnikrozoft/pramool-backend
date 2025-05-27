@@ -8,7 +8,7 @@ import (
 )
 
 type UserRepository interface {
-	FindUserIdByEmailAndPassword(ctx context.Context, email, password string) (string, error)
+	GetMyInformation(ctx context.Context, userID string) (*entity.User, error)
 }
 
 type user struct {
@@ -20,10 +20,9 @@ func NewUserRepository(bun *bun.DB) UserRepository {
 		bun: bun,
 	}
 }
-
-func (r user) FindUserIdByEmailAndPassword(ctx context.Context, email, password string) (string, error) {
+func (r user) GetMyInformation(ctx context.Context, userID string) (*entity.User, error) {
 	user := new(entity.User)
-	query := `SELECT user_id FROM users WHERE email = ? AND password = ?`
-	err := r.bun.NewRaw(query, email, password).Scan(ctx, user)
-	return user.UserId, err
+	query := `SELECT * FROM users WHERE user_id = ?`
+	err := r.bun.NewRaw(query, userID).Scan(ctx, user)
+	return user, err
 }
