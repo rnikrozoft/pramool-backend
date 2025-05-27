@@ -1,13 +1,11 @@
 package exception
 
-type Exception struct {
-	Code   string
-	Detail string
+type Response struct {
+	Code int `json:"code"`
 }
 
-func Set(code, detail string) Exception {
-	return Exception{
-		Code:   code,
-		Detail: detail,
+func Set(code int) Response {
+	return Response{
+		Code: code,
 	}
 }
