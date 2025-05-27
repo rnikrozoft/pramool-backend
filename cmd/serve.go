@@ -63,7 +63,11 @@ func init() {
 // @externalDocs.url          https://swagger.io/resources/open-api/
 func serve() {
 	app := fiber.New()
-	app.Use(cors.New())
+	app.Use(cors.New(cors.Config{
+		AllowOrigins:     "http://localhost:3000",
+		AllowCredentials: true,
+		AllowHeaders:     "Origin, Content-Type, Accept, Authorization",
+	}))
 
 	validate := validator.New()
 
@@ -73,13 +77,18 @@ func serve() {
 	app.Get("/swagger/*", swagger.HandlerDefault)
 
 	userRepository := repository.NewUserRepository(conn)
+	userService := service.NewUserService(userRepository)
+
 	authenticationService := service.NewAuthenticationService(appConfigs, userRepository)
 
 	registerRepository := repository.NewRegisterRepository(conn)
-	registerService := service.NewRegisterService(registerRepository, authenticationService)
-	registerHandler := handler.NewRegisterHandler(validate, registerService)
+	registerService := service.NewRegisterService(registerRepository)
+	registerHandler := handler.NewRegisterHandler(validate, authenticationService, registerService)
 
 	app.Post("/register", registerHandler.Register)
+
+	userhandler := handler.NewUserHandler(userService)
+	app.Get("/user", userhandler.GetMyInformation)
 
 	app.Listen(":3001")
 }
