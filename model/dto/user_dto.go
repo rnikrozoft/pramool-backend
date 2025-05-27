@@ -1,9 +1,16 @@
 package dto
 
-type User struct {
-	UserId    string `json:"user_id" validate:"required,max=13"`
-	Email     string `json:"email" validate:"required,max=255"`
-	Password  string `json:"password" validate:"required,max=100"`
-	FirstName string `json:"first_name" validate:"required,max=100"`
-	LastName  string `json:"last_name" validate:"required,max=100"`
+type UserRegisterRequest struct {
+	UserID         string `json:"user_id" validate:"required,max=13"`
+	Tel            string `json:"tel" validate:"required,max=10"`
+	FirstName      string `json:"first_name" validate:"required,max=100"`
+	LastName       string `json:"last_name" validate:"required,max=100"`
+	AddressPrimary string `json:"address_primary" validate:"required"`
+	Address        string `json:"address"`
+	Soi            string `json:"soi"`
+	Road           string `json:"road"`
+	SubDistrict    string `json:"sub_district" validate:"required"`
+	District       string `json:"district" validate:"required"`
+	Province       string `json:"province" validate:"required"`
+	ZipCode        string `json:"zip_code" validate:"required"`
 }
