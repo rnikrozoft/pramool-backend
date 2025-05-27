@@ -1,27 +1,88 @@
 definitions:
-  dto.User:
+  dto.UserAddress:
     properties:
+      country:
+        type: string
+      district:
+        type: string
+      house_number:
+        type: string
+      moo:
+        type: string
+      province:
+        type: string
+      road:
+        type: string
+      soi:
+        type: string
+      sub_district:
+        type: string
+      zip_code:
+        type: string
+    required:
+    - country
+    - district
+    - house_number
+    - province
+    - sub_district
+    - zip_code
+    type: object
+  dto.UserEmailInfo:
+    properties:
+      confirm_password:
+        maxLength: 100
+        type: string
       email:
         maxLength: 255
         type: string
+      password:
+        maxLength: 100
+        type: string
+    required:
+    - confirm_password
+    - email
+    - password
+    type: object
+  dto.UserInformation:
+    properties:
+      address:
+        $ref: '#/definitions/dto.UserAddress'
       first_name:
         maxLength: 100
         type: string
       last_name:
         maxLength: 100
         type: string
-      password:
-        maxLength: 100
+      tel:
+        maxLength: 10
         type: string
       user_id:
         maxLength: 13
         type: string
     required:
-    - email
+    - address
     - first_name
     - last_name
-    - password
+    - tel
     - user_id
+    type: object
+  dto.UserRegisterRequest:
+    properties:
+      address:
+        $ref: '#/definitions/dto.UserAddress'
+      email_info:
+        $ref: '#/definitions/dto.UserEmailInfo'
+      information:
+        $ref: '#/definitions/dto.UserInformation'
+    required:
+    - address
+    - email_info
+    - information
+    type: object
+  exception.Response:
+    properties:
+      code:
+        type: integer
     type: object
   model.RegisterResponse:
     properties:
@@ -35,14 +96,14 @@ paths:
     post:
       consumes:
       - application/json
-      description: User Register
+      description: Create a new user and return JWT token upon success
       parameters:
       - description: User data
         in: body
         name: user
         required: true
         schema:
-          $ref: '#/definitions/dto.User'
+          $ref: '#/definitions/dto.UserRegisterRequest'
       produces:
       - application/json
       responses:
@@ -50,7 +111,50 @@ paths:
           description: Created
           schema:
             $ref: '#/definitions/model.RegisterResponse'
-      summary: Register
+        "400":
+          description: Invalid input or registration failure
+          schema:
+            $ref: '#/definitions/exception.Response'
+        "500":
+          description: Cannot register or token generation failure
+          schema:
+            $ref: '#/definitions/exception.Response'
+      summary: Register new user and return authentication token
+      tags:
+      - User
+  /validate-registration:
+    post:
+      consumes:
+      - application/json
+      description: Check if the email already exists and whether password matches
+        confirm password
+      parameters:
+      - description: User email and password info
+        in: body
+        name: user
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UserEmailInfo'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: string
+        "400":
+          description: Bad request or password mismatch
+          schema:
+            $ref: '#/definitions/exception.Response'
+        "409":
+          description: Email already exists
+          schema:
+            $ref: '#/definitions/exception.Response'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/exception.Response'
+      summary: Validate email availability and password confirmation
       tags:
       - User
 swagger: "2.0"

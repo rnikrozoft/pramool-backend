@@ -17,7 +17,7 @@ const docTemplate = `{
     "paths": {
         "/register": {
             "post": {
-                "description": "User Register",
+                "description": "Create a new user and return JWT token upon success",
                 "consumes": [
                     "application/json"
                 ],
@@ -27,7 +27,7 @@ const docTemplate = `{
                 "tags": [
                     "User"
                 ],
-                "summary": "Register",
+                "summary": "Register new user and return authentication token",
                 "parameters": [
                     {
                         "description": "User data",
@@ -35,7 +35,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/dto.User"
+                            "$ref": "#/definitions/dto.UserRegisterRequest"
                         }
                     }
                 ],
@@ -45,25 +45,150 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/model.RegisterResponse"
                         }
+                    },
+                    "400": {
+                        "description": "Invalid input or registration failure",
+                        "schema": {
+                            "$ref": "#/definitions/exception.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Cannot register or token generation failure",
+                        "schema": {
+                            "$ref": "#/definitions/exception.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/validate-registration": {
+            "post": {
+                "description": "Check if the email already exists and whether password matches confirm password",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "User"
+                ],
+                "summary": "Validate email availability and password confirmation",
+                "parameters": [
+                    {
+                        "description": "User email and password info",
+                        "name": "user",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.UserEmailInfo"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request or password mismatch",
+                        "schema": {
+                            "$ref": "#/definitions/exception.Response"
+                        }
+                    },
+                    "409": {
+                        "description": "Email already exists",
+                        "schema": {
+                            "$ref": "#/definitions/exception.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/exception.Response"
+                        }
                     }
                 }
             }
         }
     },
     "definitions": {
-        "dto.User": {
+        "dto.UserAddress": {
             "type": "object",
             "required": [
-                "email",
-                "first_name",
-                "last_name",
-                "password",
-                "user_id"
+                "country",
+                "district",
+                "house_number",
+                "province",
+                "sub_district",
+                "zip_code"
             ],
             "properties": {
+                "country": {
+                    "type": "string"
+                },
+                "district": {
+                    "type": "string"
+                },
+                "house_number": {
+                    "type": "string"
+                },
+                "moo": {
+                    "type": "string"
+                },
+                "province": {
+                    "type": "string"
+                },
+                "road": {
+                    "type": "string"
+                },
+                "soi": {
+                    "type": "string"
+                },
+                "sub_district": {
+                    "type": "string"
+                },
+                "zip_code": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.UserEmailInfo": {
+            "type": "object",
+            "required": [
+                "confirm_password",
+                "email",
+                "password"
+            ],
+            "properties": {
+                "confirm_password": {
+                    "type": "string",
+                    "maxLength": 100
+                },
                 "email": {
                     "type": "string",
                     "maxLength": 255
+                },
+                "password": {
+                    "type": "string",
+                    "maxLength": 100
+                }
+            }
+        },
+        "dto.UserInformation": {
+            "type": "object",
+            "required": [
+                "address",
+                "first_name",
+                "last_name",
+                "tel",
+                "user_id"
+            ],
+            "properties": {
+                "address": {
+                    "$ref": "#/definitions/dto.UserAddress"
                 },
                 "first_name": {
                     "type": "string",
@@ -73,13 +198,40 @@ const docTemplate = `{
                     "type": "string",
                     "maxLength": 100
                 },
-                "password": {
+                "tel": {
                     "type": "string",
-                    "maxLength": 100
+                    "maxLength": 10
                 },
                 "user_id": {
                     "type": "string",
                     "maxLength": 13
+                }
+            }
+        },
+        "dto.UserRegisterRequest": {
+            "type": "object",
+            "required": [
+                "address",
+                "email_info",
+                "information"
+            ],
+            "properties": {
+                "address": {
+                    "$ref": "#/definitions/dto.UserAddress"
+                },
+                "email_info": {
+                    "$ref": "#/definitions/dto.UserEmailInfo"
+                },
+                "information": {
+                    "$ref": "#/definitions/dto.UserInformation"
+                }
+            }
+        },
+        "exception.Response": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
                 }
             }
         },
