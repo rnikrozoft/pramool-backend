@@ -10,9 +10,11 @@ import (
 	"github.com/gofiber/swagger"
 	_ "github.com/rnikrozoft/pramool.in.th-backend/docs"
 	"github.com/rnikrozoft/pramool.in.th-backend/handler"
+	"github.com/rnikrozoft/pramool.in.th-backend/middleware"
 	"github.com/rnikrozoft/pramool.in.th-backend/repository"
 	"github.com/rnikrozoft/pramool.in.th-backend/service"
 	"github.com/spf13/cobra"
+	"go.uber.org/zap"
 )
 
 // serveCmd represents the serve command
@@ -62,7 +64,11 @@ func init() {
 // @externalDocs.description  OpenAPI
 // @externalDocs.url          https://swagger.io/resources/open-api/
 func serve() {
+	logger, _ := zap.NewProduction()
+	defer logger.Sync()
+
 	app := fiber.New()
+
 	app.Use(cors.New(cors.Config{
 		AllowOrigins:     "http://localhost:3000",
 		AllowCredentials: true,
@@ -85,10 +91,26 @@ func serve() {
 	registerService := service.NewRegisterService(registerRepository)
 	registerHandler := handler.NewRegisterHandler(validate, authenticationService, registerService)
 
-	app.Post("/register", registerHandler.Register)
+	otpService := service.NewOTPService(
+		logger,
+		appConfigs.ThaiBulkSMS.AddressRequest,
+		appConfigs.ThaiBulkSMS.AddressVerify,
+		appConfigs.ThaiBulkSMS.APIKey,
+		appConfigs.ThaiBulkSMS.APISecret,
+	)
+	otpHandler := handler.NewOTPHandler(validate, otpService, registerService)
 
 	userhandler := handler.NewUserHandler(userService)
-	app.Get("/user", userhandler.GetMyInformation)
+
+	m := middleware.Middleware{JwtSecret: appConfigs.Jwt.Secret}
+
+	user := app.Group("/users")
+	user.Get("/", m.JWTMiddleware, userhandler.GetMyInformation)
+	user.Get("/:tel", userhandler.IsTelAlreadyUsed)
+	user.Post("/", registerHandler.Register)
+
+	app.Post("/otp/request", otpHandler.RequestOTP)
+	app.Post("/otp/verify", otpHandler.VerifyOTP)
 
 	app.Listen(":3001")
 }
