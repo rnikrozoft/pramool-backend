@@ -3,8 +3,6 @@ package handler
 import (
 	"github.com/go-playground/validator/v10"
 	"github.com/gofiber/fiber/v2"
-	"github.com/rnikrozoft/pramool.in.th-backend/constant"
-	"github.com/rnikrozoft/pramool.in.th-backend/exception"
 	"github.com/rnikrozoft/pramool.in.th-backend/mapping"
 	"github.com/rnikrozoft/pramool.in.th-backend/model/dto"
 	"github.com/rnikrozoft/pramool.in.th-backend/service"
@@ -48,15 +46,13 @@ func (h RegisterHandler) Register(c *fiber.Ctx) error {
 	}
 
 	userEntity := mapping.ToUserEntity(*user)
-	if err := h.registerService.Register(ctx, userEntity); err != nil {
-		e := exception.Set(constant.ErrorSomethingWentWrong)
-		return c.Status(fiber.StatusInternalServerError).JSON(e)
+	if err := h.registerService.RegisterUser(ctx, userEntity); err != nil {
+		return responseCommonError(c, err)
 	}
 
 	token, err := h.authenticationService.GenerateToken(user.UserID)
 	if err != nil {
-		e := exception.Set(constant.ErrorSomethingWentWrong)
-		return c.Status(fiber.StatusInternalServerError).JSON(e)
+		return responseCommonError(c, err)
 	}
 
 	c.Cookie(&fiber.Cookie{
