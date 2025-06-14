@@ -31,6 +31,7 @@ func (service authentication) GenerateToken(userID string) (string, error) {
 	claims := &model.CustomClaims{
 		UserID: userID,
 		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer:    service.appConfigs.Jwt.Issuer,
 			ExpiresAt: jwt.NewNumericDate(expirationTime),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 		},
