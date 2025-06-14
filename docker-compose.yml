@@ -1,53 +1,78 @@
 version: '3.9'
 services:
-  db:
-    container_name: db
+  # db:
+  #   container_name: db
+  #   image: postgres:13
+  #   restart: always
+  #   shm_size: 128mb
+  #   environment:
+  #     POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
+  #     POSTGRES_DB: ${DATABASE_NAME}
+  #   ports:
+  #     - 5432:5432
+  #   networks:
+  #     - backend-network
+
+  kong-database:
     image: postgres:13
-    restart: always
-    shm_size: 128mb
-    environment:
-      POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
-      POSTGRES_DB: ${DATABASE_NAME}
+    container_name: kong-database
     ports:
-      - 5432:5432
-    networks:
-      - backend-network
+      - 5433:5432
+    environment:
+      - POSTGRES_USER=kong
+      - POSTGRES_DB=kong
+      - POSTGRES_PASSWORD=kong
+    # volumes:
+    #   - "db-data-kong-postgres:/var/lib/postgresql/data"
 
   kong-migrations:
-    image: kong:3.6
-    depends_on:
-      - db
+    image: kong
     environment:
-      KONG_DATABASE: postgres
-      KONG_PG_HOST: db
-      KONG_PG_PASSWORD: ${DATABASE_PASSWORD}
+      - KONG_DATABASE=postgres
+      - KONG_PG_HOST=kong-database
+      - KONG_PG_PASSWORD=kong
+      - KONG_CASSANDRA_CONTACT_POINTS=kong-database
     command: kong migrations bootstrap
-    networks:
-      - backend-network
+    restart: on-failure
+    depends_on:
+      - kong-database
 
   kong:
-    image: kong:3.6
+    image: kong
     container_name: kong
-    restart: unless-stopped
-    depends_on:
-      - db
-      - kong-migrations
     environment:
-      KONG_DATABASE: postgres
-      KONG_PG_HOST: db
-      KONG_PG_PASSWORD: ${DATABASE_PASSWORD}
-      KONG_PROXY_ACCESS_LOG: /dev/stdout
-      KONG_ADMIN_ACCESS_LOG: /dev/stdout
-      KONG_PROXY_ERROR_LOG: /dev/stderr
-      KONG_ADMIN_ERROR_LOG: /dev/stderr
-      KONG_ADMIN_LISTEN: 0.0.0.0:8001, 0.0.0.0:8444 ssl
+      - LC_CTYPE=en_US.UTF-8
+      - LC_ALL=en_US.UTF-8
+      - KONG_DATABASE=postgres
+      - KONG_PG_HOST=kong-database
+      - KONG_PG_USER=kong
+      - KONG_PG_PASSWORD=kong
+      - KONG_CASSANDRA_CONTACT_POINTS=kong-database
+      - KONG_PROXY_ACCESS_LOG=/dev/stdout
+      - KONG_ADMIN_ACCESS_LOG=/dev/stdout
+      - KONG_PROXY_ERROR_LOG=/dev/stderr
+      - KONG_ADMIN_ERROR_LOG=/dev/stderr
+      - KONG_ADMIN_LISTEN=0.0.0.0:8001, 0.0.0.0:8444 ssl
+    restart: on-failure
     ports:
-      - "8000:8000"     
-      - "8443:8443"     
-      - "8001:8001"     
-      - "8444:8444"
-    networks:
-      - backend-network     
+      - 8000:8000
+      - 8443:8443
+      - 8001:8001
+      - 8444:8444
+    links:
+      - kong-database:kong-database
+    depends_on:
+      - kong-migrations
+
+  konga:
+    image: pantsel/konga
+    ports:
+      - 1337:1337
+    links:
+      - kong:kong
+    container_name: konga
+    environment:
+      - NODE_ENV=production
 
   # backend:
   #   container_name: backend
