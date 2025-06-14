@@ -1,8 +1,9 @@
 package config
 
 type AppConfigs struct {
-	Database DatabaseConfig
-	Jwt      JwtConfig
+	Database    DatabaseConfig
+	Jwt         JwtConfig
+	ThaiBulkSMS ThaiBulkSMS
 }
 
 type DatabaseConfig struct {
@@ -14,6 +15,14 @@ type DatabaseConfig struct {
 }
 
 type JwtConfig struct {
+	Issuer     string
 	Secret     string
 	ExpireTime int
+}
+
+type ThaiBulkSMS struct {
+	AddressRequest string
+	AddressVerify  string
+	APIKey         string
+	APISecret      string
 }
