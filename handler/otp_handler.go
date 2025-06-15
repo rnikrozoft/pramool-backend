@@ -32,9 +32,9 @@ func (h OtpHandler) RequestOTP(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(err)
 	}
 
-	// if err := h.registerService.RegisterTelIfNotExist(c.Context(), req.Tel); err != nil {
-	// 	return responseCommonError(c, err)
-	// }
+	if err := h.registerService.RegisterTelIfNotExist(c.Context(), req.Tel); err != nil {
+		return responseCommonError(c, err)
+	}
 
 	// res, err := h.otpService.Request(req.Tel)
 	// if err != nil {
