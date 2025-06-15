@@ -29,7 +29,8 @@ func (service authentication) GenerateToken(userID string) (string, error) {
 	expirationTime := time.Now().Add(time.Duration(service.appConfigs.Jwt.ExpireTime) * time.Hour)
 
 	claims := &model.CustomClaims{
-		UserID: userID,
+		UserID:   userID,
+		LoggedIn: true,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    service.appConfigs.Jwt.Issuer,
 			ExpiresAt: jwt.NewNumericDate(expirationTime),

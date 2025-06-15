@@ -3,6 +3,7 @@ package model
 import "github.com/golang-jwt/jwt/v5"
 
 type CustomClaims struct {
-	UserID string
+	UserID   string
+	LoggedIn bool
 	jwt.RegisteredClaims
 }
