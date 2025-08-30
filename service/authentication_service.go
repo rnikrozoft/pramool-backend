@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -11,6 +12,7 @@ import (
 
 type AuthenticationService interface {
 	GenerateToken(userID string) (string, error)
+	LoginByTel(ctx context.Context, tel string) (string, error)
 }
 
 type authentication struct {
@@ -45,4 +47,17 @@ func (service authentication) GenerateToken(userID string) (string, error) {
 	}
 
 	return tokenString, nil
+}
+
+func (service authentication) LoginByTel(ctx context.Context, tel string) (string, error) {
+	userData, err := service.userRepository.FindByTel(ctx, tel)
+	if err != nil {
+		return "", err
+	}
+
+	token, err := service.GenerateToken(userData.UserID)
+	if err != nil {
+		return "", err
+	}
+	return token, nil
 }

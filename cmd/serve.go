@@ -86,6 +86,7 @@ func serve() {
 	userService := service.NewUserService(userRepository)
 
 	authenticationService := service.NewAuthenticationService(appConfigs, userRepository)
+	authenticationHandler := handler.NewAuthenticationHandler(validate, authenticationService)
 
 	registerRepository := repository.NewRegisterRepository(conn)
 	registerService := service.NewRegisterService(registerRepository)
@@ -111,6 +112,8 @@ func serve() {
 
 	app.Post("/otp/request", otpHandler.RequestOTP)
 	app.Post("/otp/verify", otpHandler.VerifyOTP)
+
+	app.Post("/login/tel", authenticationHandler.LoginByTel)
 
 	app.Listen(":3001")
 }
