@@ -1,10 +1,12 @@
 package handler
 
 import (
+	"time"
+
 	"github.com/go-playground/validator/v10"
 	"github.com/gofiber/fiber/v2"
-	"github.com/rnikrozoft/pramool.in.th-backend/model/dto"
-	"github.com/rnikrozoft/pramool.in.th-backend/service"
+	"github.com/rnikrozoft/pramool-core/model/dto"
+	"github.com/rnikrozoft/pramool-core/service"
 )
 
 type AuthenticationHandler struct {
@@ -40,6 +42,19 @@ func (h AuthenticationHandler) LoginByTel(c *fiber.Ctx) error {
 		SameSite: "Lax",
 		Path:     "/",
 		MaxAge:   3600,
+	})
+	return c.SendStatus(fiber.StatusOK)
+}
+
+func (h AuthenticationHandler) Logout(c *fiber.Ctx) error {
+	c.Cookie(&fiber.Cookie{
+		Name:     "access_token",
+		Value:    "",
+		HTTPOnly: true,
+		SameSite: "Lax",
+		Path:     "/",
+		Expires:  time.Unix(0, 0),
+		MaxAge:   -1,
 	})
 	return c.SendStatus(fiber.StatusOK)
 }

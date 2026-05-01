@@ -1,0 +1,16 @@
+{
+	"folders": [
+		{
+			"path": "../pramool-auction-service"
+		},
+		{
+			"path": "."
+		},
+		{
+			"path": "../pramool-wallet-service"
+		},
+		{
+			"path": "../pramool.in.th"
+		}
+	]
+}

@@ -4,15 +4,17 @@ Copyright © 2025 rnikrozoft rnikrozoft.dev@gmail.com
 package cmd
 
 import (
+	"strings"
+
 	"github.com/go-playground/validator/v10"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/swagger"
-	_ "github.com/rnikrozoft/pramool.in.th-backend/docs"
-	"github.com/rnikrozoft/pramool.in.th-backend/handler"
-	"github.com/rnikrozoft/pramool.in.th-backend/middleware"
-	"github.com/rnikrozoft/pramool.in.th-backend/repository"
-	"github.com/rnikrozoft/pramool.in.th-backend/service"
+	_ "github.com/rnikrozoft/pramool-core/docs"
+	"github.com/rnikrozoft/pramool-core/handler"
+	"github.com/rnikrozoft/pramool-core/middleware"
+	"github.com/rnikrozoft/pramool-core/repository"
+	"github.com/rnikrozoft/pramool-core/service"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 )
@@ -34,16 +36,6 @@ to quickly create a Cobra application.`,
 
 func init() {
 	rootCmd.AddCommand(serveCmd)
-
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// serveCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// serveCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }
 
 // @title           Pramool Backend API
@@ -67,12 +59,19 @@ func serve() {
 	logger, _ := zap.NewProduction()
 	defer logger.Sync()
 
-	app := fiber.New()
+	app := fiber.New(fiber.Config{
+		AppName: "pramool-core",
+	})
 
+	corsOrigins := strings.TrimSpace(appConfigs.CorsAllowOrigins)
+	if corsOrigins == "" {
+		corsOrigins = "http://localhost:3000"
+	}
 	app.Use(cors.New(cors.Config{
-		AllowOrigins:     "http://localhost:3000",
+		AllowOrigins:     corsOrigins,
+		AllowOriginsFunc: corsAllowDevLAN,
 		AllowCredentials: true,
-		AllowHeaders:     "Origin, Content-Type, Accept, Authorization",
+		AllowHeaders:     "Origin, Content-Type, Accept, Authorization, Cookie",
 	}))
 
 	validate := validator.New()
@@ -81,11 +80,14 @@ func serve() {
 		return c.Redirect("/swagger")
 	})
 	app.Get("/swagger/*", swagger.HandlerDefault)
+	app.Static("/uploads", "./uploads")
 
 	userRepository := repository.NewUserRepository(conn)
+	auctionRepository := repository.NewAuctionRepository(conn)
 	userService := service.NewUserService(userRepository)
+	auctionService := service.NewAuctionService(auctionRepository)
 
-	authenticationService := service.NewAuthenticationService(appConfigs, userRepository)
+	authenticationService := service.NewAuthenticationService(appConfigs, userService)
 	authenticationHandler := handler.NewAuthenticationHandler(validate, authenticationService)
 
 	registerRepository := repository.NewRegisterRepository(conn)
@@ -99,21 +101,31 @@ func serve() {
 		appConfigs.ThaiBulkSMS.APIKey,
 		appConfigs.ThaiBulkSMS.APISecret,
 	)
-	otpHandler := handler.NewOTPHandler(validate, otpService, registerService)
+	otpHandler := handler.NewOTPHandler(validate, otpService, registerService, userService)
 
-	userhandler := handler.NewUserHandler(userService)
+	userhandler := handler.NewUserHandler(validate, userService)
+	auctionHandler := handler.NewAuctionHandler(auctionService)
 
-	m := middleware.Middleware{JwtSecret: appConfigs.Jwt.Secret}
+	m := middleware.Middleware{JWTSecret: appConfigs.Jwt.Secret}
 
 	user := app.Group("/users")
 	user.Get("/", m.JWTMiddleware, userhandler.GetMyInformation)
+	user.Get("/profile", m.JWTMiddleware, userhandler.GetMyInformation)
+	user.Get("/onboarding-status", m.JWTMiddleware, userhandler.GetOnboardingStatus)
+	user.Put("/profile", m.JWTMiddleware, userhandler.UpdateProfile)
 	user.Get("/:tel", userhandler.IsTelAlreadyUsed)
 	user.Post("/", registerHandler.Register)
 
 	app.Post("/otp/request", otpHandler.RequestOTP)
 	app.Post("/otp/verify", otpHandler.VerifyOTP)
+	app.Post("/otp/timeout", otpHandler.RecordTimeout)
 
 	app.Post("/login/tel", authenticationHandler.LoginByTel)
+	app.Post("/logout", authenticationHandler.Logout)
+
+	app.Post("/seller/auctions", m.JWTMiddleware, auctionHandler.CreateAuction)
+	app.Get("/seller/auctions", m.JWTMiddleware, auctionHandler.MyAuctions)
+	app.Get("/seller/earnings", m.JWTMiddleware, auctionHandler.MyEarnings)
 
 	app.Listen(":3001")
 }

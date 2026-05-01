@@ -85,6 +85,12 @@ JWT_SECRET=
 JWT_EXPIRE_TIME=
 ```
 
+### Omise Configuration
+```env
+OMISE_SECRET_KEY=
+OMISE_WEBHOOK_SECRET=
+```
+
 > ⚠️ Important: Never commit your .env file to version control (it is already ignored via .gitignore).
 
 ---

@@ -5,25 +5,28 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 
-	"github.com/rnikrozoft/pramool.in.th-backend/migrations"
+	"github.com/rnikrozoft/pramool-core/migrations"
 	"github.com/spf13/cobra"
 )
 
-// rollbackCmd represents the rollback command
+// rollbackCmd rolls back the last applied SQL migration group (runs paired *.down.sql).
 var rollbackCmd = &cobra.Command{
 	Use:   "rollback",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+	Short: "Roll back the last applied database migration group",
 	Run: func(cmd *cobra.Command, args []string) {
-		if _, err := migrations.Rollback(context.Background(), conn); err != nil {
+		fmt.Fprintf(cmd.OutOrStdout(), "rollback target: %s\n", databaseTargetLine())
+		fmt.Fprintln(cmd.OutOrStdout(), "            (bun tracks applied files in table bun_migrations)")
+		group, err := migrations.Rollback(context.Background(), conn)
+		if err != nil {
 			panic(err)
 		}
+		if group == nil || group.IsZero() {
+			fmt.Fprintln(cmd.OutOrStdout(), "rollback: nothing to roll back (no applied migrations)")
+			return
+		}
+		fmt.Fprintf(cmd.OutOrStdout(), "rollback OK: %s\n", group.String())
 	},
 }
 

@@ -3,9 +3,9 @@ package handler
 import (
 	"github.com/go-playground/validator/v10"
 	"github.com/gofiber/fiber/v2"
-	"github.com/rnikrozoft/pramool.in.th-backend/mapping"
-	"github.com/rnikrozoft/pramool.in.th-backend/model/dto"
-	"github.com/rnikrozoft/pramool.in.th-backend/service"
+	"github.com/rnikrozoft/pramool-core/mapping"
+	"github.com/rnikrozoft/pramool-core/model/dto"
+	"github.com/rnikrozoft/pramool-core/service"
 )
 
 type RegisterHandler struct {

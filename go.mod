@@ -1,4 +1,4 @@
-module github.com/rnikrozoft/pramool.in.th-backend
+module github.com/rnikrozoft/pramool-core
 
 go 1.24.0
 

@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/rnikrozoft/pramool.in.th-backend/model"
+	"github.com/rnikrozoft/pramool-core/model"
 	"go.uber.org/zap"
 )
 

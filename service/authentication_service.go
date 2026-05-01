@@ -5,9 +5,8 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/rnikrozoft/pramool.in.th-backend/config"
-	"github.com/rnikrozoft/pramool.in.th-backend/model"
-	"github.com/rnikrozoft/pramool.in.th-backend/repository"
+	"github.com/rnikrozoft/pramool-core/config"
+	"github.com/rnikrozoft/pramool-core/model"
 )
 
 type AuthenticationService interface {
@@ -16,14 +15,14 @@ type AuthenticationService interface {
 }
 
 type authentication struct {
-	appConfigs     config.AppConfigs
-	userRepository repository.UserRepository
+	appConfigs  config.AppConfigs
+	userService UserService
 }
 
-func NewAuthenticationService(appConfigs config.AppConfigs, userRepository repository.UserRepository) AuthenticationService {
+func NewAuthenticationService(appConfigs config.AppConfigs, userService UserService) AuthenticationService {
 	return authentication{
-		appConfigs:     appConfigs,
-		userRepository: userRepository,
+		appConfigs:  appConfigs,
+		userService: userService,
 	}
 }
 
@@ -35,29 +34,20 @@ func (service authentication) GenerateToken(userID string) (string, error) {
 		LoggedIn: true,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    service.appConfigs.Jwt.Issuer,
+			Subject:   userID,
 			ExpiresAt: jwt.NewNumericDate(expirationTime),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 		},
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	tokenString, err := token.SignedString([]byte(service.appConfigs.Jwt.Secret))
-	if err != nil {
-		return "", err
-	}
-
-	return tokenString, nil
+	return token.SignedString([]byte(service.appConfigs.Jwt.Secret))
 }
 
 func (service authentication) LoginByTel(ctx context.Context, tel string) (string, error) {
-	userData, err := service.userRepository.FindByTel(ctx, tel)
+	sub, err := service.userService.FindUserIDByTelWithFallback(ctx, tel)
 	if err != nil {
 		return "", err
 	}
-
-	token, err := service.GenerateToken(userData.UserID)
-	if err != nil {
-		return "", err
-	}
-	return token, nil
+	return service.GenerateToken(sub)
 }

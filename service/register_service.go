@@ -2,11 +2,9 @@ package service
 
 import (
 	"context"
-	"database/sql"
-	"errors"
 
-	"github.com/rnikrozoft/pramool.in.th-backend/model/entity"
-	"github.com/rnikrozoft/pramool.in.th-backend/repository"
+	"github.com/rnikrozoft/pramool-core/model/entity"
+	"github.com/rnikrozoft/pramool-core/repository"
 )
 
 type RegisterService interface {
@@ -27,17 +25,7 @@ func NewRegisterService(
 }
 
 func (service register) RegisterTelIfNotExist(ctx context.Context, tel string) error {
-	data, err := service.registerRepository.FindPhoneNumber(ctx, tel)
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return err
-	}
-
-	if data == nil || errors.Is(err, sql.ErrNoRows) {
-		if err := service.registerRepository.RegisterTel(ctx, tel); err != nil {
-			return err
-		}
-	}
-	return nil
+	return service.registerRepository.RegisterTelIfNotExist(ctx, tel)
 }
 
 func (service register) RegisterUser(ctx context.Context, user entity.User) error {
@@ -47,11 +35,6 @@ func (service register) RegisterUser(ctx context.Context, user entity.User) erro
 	}
 
 	if err := service.registerRepository.RegisterUserWithTx(ctx, tx, user); err != nil {
-		_ = tx.Rollback()
-		return err
-	}
-
-	if err := service.registerRepository.SetTelIsVerifyWithTx(ctx, tx, user.Tel); err != nil {
 		_ = tx.Rollback()
 		return err
 	}

@@ -1,9 +1,10 @@
 package config
 
 type AppConfigs struct {
-	Database    DatabaseConfig
-	Jwt         JwtConfig
-	ThaiBulkSMS ThaiBulkSMS
+	Database         DatabaseConfig
+	Jwt              JwtConfig
+	ThaiBulkSMS      ThaiBulkSMS
+	CorsAllowOrigins string // comma-separated; e.g. http://localhost:3000,http://192.168.1.5:3000
 }
 
 type DatabaseConfig struct {

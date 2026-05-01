@@ -7,7 +7,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/rnikrozoft/pramool.in.th-backend/migrations"
+	"github.com/rnikrozoft/pramool-core/migrations"
 	"github.com/spf13/cobra"
 )
 

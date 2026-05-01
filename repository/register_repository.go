@@ -3,7 +3,7 @@ package repository
 import (
 	"context"
 
-	"github.com/rnikrozoft/pramool.in.th-backend/model/entity"
+	"github.com/rnikrozoft/pramool-core/model/entity"
 	"github.com/uptrace/bun"
 )
 
@@ -12,8 +12,8 @@ type Register interface {
 
 	FindPhoneNumber(ctx context.Context, tel string) (*entity.TelVerify, error)
 	RegisterTel(ctx context.Context, tel string) error
+	RegisterTelIfNotExist(ctx context.Context, tel string) error
 	RegisterUserWithTx(ctx context.Context, tx bun.Tx, user entity.User) error
-	SetTelIsVerifyWithTx(ctx context.Context, tx bun.Tx, tel string) error
 }
 
 type register struct {
@@ -46,16 +46,23 @@ func (r register) RegisterTel(ctx context.Context, tel string) error {
 	return err
 }
 
+func (r register) RegisterTelIfNotExist(ctx context.Context, tel string) error {
+	_, err := r.bun.NewRaw(`INSERT INTO tel_verify (tel) VALUES (?) ON CONFLICT (tel) DO NOTHING`, tel).Exec(ctx)
+	return err
+}
+
 func (r register) RegisterUserWithTx(ctx context.Context, tx bun.Tx, user entity.User) error {
 	query := `
 	INSERT INTO users (
-		user_id, tel, first_name, last_name, address_primary,
+		user_id, tel, email, facebook, first_name, last_name, address_primary,
 		address, soi, road, sub_district, district, province, zip_code
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 	_, err := tx.NewRaw(query,
 		user.UserID,
 		user.Tel,
+		user.Email,
+		user.Facebook,
 		user.FirstName,
 		user.LastName,
 		user.AddressPrimary,
@@ -70,8 +77,3 @@ func (r register) RegisterUserWithTx(ctx context.Context, tx bun.Tx, user entity
 	return err
 }
 
-func (r register) SetTelIsVerifyWithTx(ctx context.Context, tx bun.Tx, tel string) error {
-	query := `UPDATE tel_verify SET verify = TRUE WHERE tel = ?`
-	_, err := tx.NewRaw(query, tel).Exec(ctx)
-	return err
-}

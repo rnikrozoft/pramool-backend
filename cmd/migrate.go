@@ -5,25 +5,28 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 
-	"github.com/rnikrozoft/pramool.in.th-backend/migrations"
+	"github.com/rnikrozoft/pramool-core/migrations"
 	"github.com/spf13/cobra"
 )
 
-// migrateCmd represents the migrate command
+// migrateCmd applies pending SQL migrations embedded in the binary (*.up.sql).
 var migrateCmd = &cobra.Command{
 	Use:   "migrate",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+	Short: "Apply pending database migrations",
 	Run: func(cmd *cobra.Command, args []string) {
-		if _, err := migrations.Migrate(context.Background(), conn); err != nil {
+		fmt.Fprintf(cmd.OutOrStdout(), "migrate target: %s\n", databaseTargetLine())
+		fmt.Fprintln(cmd.OutOrStdout(), "         (bun tracks applied files in table bun_migrations)")
+		group, err := migrations.Migrate(context.Background(), conn)
+		if err != nil {
 			panic(err)
 		}
+		if group == nil || group.IsZero() {
+			fmt.Fprintln(cmd.OutOrStdout(), "migrate: already up to date (no pending migrations)")
+			return
+		}
+		fmt.Fprintf(cmd.OutOrStdout(), "migrate OK: %s\n", group.String())
 	},
 }
 
