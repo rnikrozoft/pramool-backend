@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -11,18 +13,22 @@ import (
 	"github.com/rnikrozoft/pramool-core/repository"
 )
 
+// ErrAuctionReopenNotAllowed is returned when reopen preconditions are not met.
+var ErrAuctionReopenNotAllowed = errors.New("auction cannot be reopened: must be closed with no bids")
+
 type AuctionService interface {
 	CreateAuction(ctx context.Context, sellerID string, req dto.CreateAuctionRequest, imagePaths []string) (*dto.CreateAuctionResponse, error)
 	GetSellerAuctions(ctx context.Context, sellerID string) ([]dto.SellerAuctionItem, error)
-	ListSellerEarnings(ctx context.Context, sellerID string, limit, offset int) ([]dto.SellerEarningItem, error)
+	ReopenAuctionNoBids(ctx context.Context, sellerID, auctionID, endAtRFC3339 string) error
 }
 
 type auction struct {
-	repo repository.AuctionRepository
+	repo     repository.AuctionRepository
+	userRepo repository.UserRepository
 }
 
-func NewAuctionService(repo repository.AuctionRepository) AuctionService {
-	return auction{repo: repo}
+func NewAuctionService(repo repository.AuctionRepository, userRepo repository.UserRepository) AuctionService {
+	return auction{repo: repo, userRepo: userRepo}
 }
 
 func (s auction) CreateAuction(ctx context.Context, sellerID string, req dto.CreateAuctionRequest, imagePaths []string) (*dto.CreateAuctionResponse, error) {
@@ -32,7 +38,7 @@ func (s auction) CreateAuction(ctx context.Context, sellerID string, req dto.Cre
 	if strings.TrimSpace(req.Title) == "" {
 		return nil, fmt.Errorf("title is required")
 	}
-	if req.StartPrice <= 0 || req.BidStep <= 0 {
+	if req.StartPrice < 100 || req.BidStep <= 0 {
 		return nil, fmt.Errorf("invalid price settings")
 	}
 	if len(imagePaths) == 0 {
@@ -43,27 +49,41 @@ func (s auction) CreateAuction(ctx context.Context, sellerID string, req dto.Cre
 	if err != nil {
 		return nil, fmt.Errorf("invalid end_at format")
 	}
+	if !endAt.After(time.Now()) {
+		return nil, fmt.Errorf("end_at must be in the future")
+	}
 	auctionID := generateAuctionID()
 
 	tx, err := s.repo.BeginTx(ctx)
 	if err != nil {
 		return nil, err
 	}
+	ok, balBefore, balAfter, err := s.userRepo.DeductListingDepositTx(ctx, tx, sellerID, req.StartPrice)
+	if err != nil {
+		_ = tx.Rollback()
+		return nil, err
+	}
+	if !ok {
+		_ = tx.Rollback()
+		return nil, fmt.Errorf("insufficient credit for start price (%d THB required)", req.StartPrice)
+	}
 
 	mainAuction := entity.Auction{
-		AuctionID:     auctionID,
-		SellerID:      sellerID,
-		Title:         strings.TrimSpace(req.Title),
-		Category:      strings.TrimSpace(req.Category),
-		Condition:     strings.TrimSpace(req.Condition),
-		Description:   strings.TrimSpace(req.Description),
-		StartPrice:    req.StartPrice,
-		BidStep:       req.BidStep,
-		CurrentBid:    req.StartPrice,
-		TotalBids:     0,
-		Status:        "active",
-		EndAt:         endAt,
-		CoverImageURL: imagePaths[0],
+		AuctionID:            auctionID,
+		SellerID:             sellerID,
+		Title:                strings.TrimSpace(req.Title),
+		Category:             strings.TrimSpace(req.Category),
+		Condition:            strings.TrimSpace(req.Condition),
+		Description:          strings.TrimSpace(req.Description),
+		StartPrice:           req.StartPrice,
+		BidStep:              req.BidStep,
+		CurrentBid:           req.StartPrice,
+		TotalBids:            0,
+		Status:               "active",
+		EndAt:                endAt,
+		AllowEarlyClose:      req.AllowEarlyClose,
+		EarlyCloseHoldAmount: 0,
+		CoverImageURL:        imagePaths[0],
 	}
 	if err := s.repo.CreateAuctionWithTx(ctx, tx, mainAuction); err != nil {
 		_ = tx.Rollback()
@@ -83,10 +103,79 @@ func (s auction) CreateAuction(ctx context.Context, sellerID string, req dto.Cre
 		return nil, err
 	}
 
+	if err := s.repo.InsertListingDepositHoldTx(ctx, tx, sellerID, auctionID, req.StartPrice, balBefore, balAfter, "หักมัดจำประกาศเมื่อสร้างประมูล"); err != nil {
+		_ = tx.Rollback()
+		return nil, err
+	}
+
 	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
 	return &dto.CreateAuctionResponse{AuctionID: auctionID}, nil
+}
+
+func (s auction) ReopenAuctionNoBids(ctx context.Context, sellerID, auctionID, endAtRFC3339 string) error {
+	if strings.TrimSpace(sellerID) == "" || strings.TrimSpace(auctionID) == "" {
+		return fmt.Errorf("missing seller or auction id")
+	}
+	endAt, err := time.Parse(time.RFC3339, strings.TrimSpace(endAtRFC3339))
+	if err != nil {
+		return fmt.Errorf("invalid end_at")
+	}
+	if !endAt.After(time.Now()) {
+		return fmt.Errorf("end_at must be in the future")
+	}
+
+	tx, err := s.repo.BeginTx(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	a, err := s.repo.LockAuctionBySellerForUpdate(ctx, tx, auctionID, sellerID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("auction not found")
+		}
+		return err
+	}
+	if a.Status != "closed" || a.TotalBids != 0 || strings.TrimSpace(a.WinnerID) != "" {
+		return ErrAuctionReopenNotAllowed
+	}
+	nBids, err := s.repo.CountAuctionBidsTx(ctx, tx, auctionID)
+	if err != nil {
+		return err
+	}
+	if nBids > 0 {
+		return ErrAuctionReopenNotAllowed
+	}
+	nHeld, err := s.repo.CountHeldBidHoldsTx(ctx, tx, auctionID)
+	if err != nil {
+		return err
+	}
+	if nHeld > 0 {
+		return ErrAuctionReopenNotAllowed
+	}
+
+	ok, balBefore, balAfter, err := s.userRepo.DeductListingDepositTx(ctx, tx, sellerID, a.StartPrice)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("insufficient credit for start price (%d THB required)", a.StartPrice)
+	}
+
+	n, err := s.repo.ApplyAuctionReopenTx(ctx, tx, auctionID, sellerID, endAt)
+	if err != nil {
+		return err
+	}
+	if n != 1 {
+		return ErrAuctionReopenNotAllowed
+	}
+	if err := s.repo.InsertListingDepositHoldTx(ctx, tx, sellerID, auctionID, a.StartPrice, balBefore, balAfter, "หักมัดจำประกาศเมื่อเปิดประมูลรอบใหม่"); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func (s auction) GetSellerAuctions(ctx context.Context, sellerID string) ([]dto.SellerAuctionItem, error) {
@@ -109,31 +198,6 @@ func (s auction) GetSellerAuctions(ctx context.Context, sellerID string) ([]dto.
 		})
 	}
 	return result, nil
-}
-
-func (s auction) ListSellerEarnings(ctx context.Context, sellerID string, limit, offset int) ([]dto.SellerEarningItem, error) {
-	if limit <= 0 || limit > 100 {
-		limit = 20
-	}
-	if offset < 0 {
-		offset = 0
-	}
-	items, err := s.repo.ListSellerEarnings(ctx, sellerID, limit, offset)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]dto.SellerEarningItem, 0, len(items))
-	for _, e := range items {
-		out = append(out, dto.SellerEarningItem{
-			EarningID:    e.EarningID,
-			AuctionID:    e.AuctionID,
-			WinnerUserID: e.WinnerUserID,
-			Amount:       e.Amount,
-			Status:       e.Status,
-			CreatedAt:    e.CreatedAt,
-		})
-	}
-	return out, nil
 }
 
 func generateAuctionID() string {

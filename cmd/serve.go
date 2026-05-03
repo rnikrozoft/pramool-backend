@@ -83,9 +83,11 @@ func serve() {
 	app.Static("/uploads", "./uploads")
 
 	userRepository := repository.NewUserRepository(conn)
+	bankRepository := repository.NewBankRepository(conn)
 	auctionRepository := repository.NewAuctionRepository(conn)
 	userService := service.NewUserService(userRepository)
-	auctionService := service.NewAuctionService(auctionRepository)
+	bankService := service.NewBankService(bankRepository)
+	auctionService := service.NewAuctionService(auctionRepository, userRepository)
 
 	authenticationService := service.NewAuthenticationService(appConfigs, userService)
 	authenticationHandler := handler.NewAuthenticationHandler(validate, authenticationService)
@@ -104,6 +106,7 @@ func serve() {
 	otpHandler := handler.NewOTPHandler(validate, otpService, registerService, userService)
 
 	userhandler := handler.NewUserHandler(validate, userService)
+	bankHandler := handler.NewBankHandler(bankService)
 	auctionHandler := handler.NewAuctionHandler(auctionService)
 
 	m := middleware.Middleware{JWTSecret: appConfigs.Jwt.Secret}
@@ -115,6 +118,7 @@ func serve() {
 	user.Put("/profile", m.JWTMiddleware, userhandler.UpdateProfile)
 	user.Get("/:tel", userhandler.IsTelAlreadyUsed)
 	user.Post("/", registerHandler.Register)
+	app.Get("/banks", bankHandler.List)
 
 	app.Post("/otp/request", otpHandler.RequestOTP)
 	app.Post("/otp/verify", otpHandler.VerifyOTP)
@@ -124,8 +128,8 @@ func serve() {
 	app.Post("/logout", authenticationHandler.Logout)
 
 	app.Post("/seller/auctions", m.JWTMiddleware, auctionHandler.CreateAuction)
+	app.Post("/seller/auctions/:id/reopen", m.JWTMiddleware, auctionHandler.ReopenAuction)
 	app.Get("/seller/auctions", m.JWTMiddleware, auctionHandler.MyAuctions)
-	app.Get("/seller/earnings", m.JWTMiddleware, auctionHandler.MyEarnings)
 
 	app.Listen(":3001")
 }

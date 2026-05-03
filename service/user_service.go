@@ -14,6 +14,7 @@ import (
 type UserService interface {
 	IsTelAlreadyUsed(ctx context.Context, tel string) (bool, error)
 	GetMyInfo(ctx context.Context, userID string) (*entity.User, error)
+	CountUserFulfillmentBlocks(ctx context.Context, userID string) (pendingSellerShip int, pendingBuyerConfirm int, err error)
 	FindUserIDByTelWithFallback(ctx context.Context, tel string) (string, error)
 	IsFirstRegistration(ctx context.Context, subject string) (bool, error)
 	UpdateMyProfile(ctx context.Context, p entity.ProfileUpdate) error
@@ -30,6 +31,10 @@ func NewUserService(userRepository repository.UserRepository) UserService {
 	return user{
 		userRepository: userRepository,
 	}
+}
+
+func (s user) CountUserFulfillmentBlocks(ctx context.Context, userID string) (int, int, error) {
+	return s.userRepository.CountUserFulfillmentBlocks(ctx, strings.TrimSpace(userID))
 }
 
 func (s user) IsTelAlreadyUsed(ctx context.Context, tel string) (bool, error) {
@@ -103,20 +108,23 @@ func (s user) UpdateMyProfile(ctx context.Context, p entity.ProfileUpdate) error
 		return ErrTelAlreadyUsed
 	}
 	err = s.userRepository.UpdateProfile(ctx, entity.ProfileUpdate{
-		UserID:         p.UserID,
-		Tel:            tel,
-		FirstName:      strings.TrimSpace(p.FirstName),
-		LastName:       strings.TrimSpace(p.LastName),
-		AddressPrimary: strings.TrimSpace(p.AddressPrimary),
-		Address:        strings.TrimSpace(p.Address),
-		Soi:            strings.TrimSpace(p.Soi),
-		Road:           strings.TrimSpace(p.Road),
-		SubDistrict:    strings.TrimSpace(p.SubDistrict),
-		District:       strings.TrimSpace(p.District),
-		Province:       strings.TrimSpace(p.Province),
-		ZipCode:        strings.TrimSpace(p.ZipCode),
-		Email:          strings.TrimSpace(p.Email),
-		Facebook:       strings.TrimSpace(p.Facebook),
+		UserID:            p.UserID,
+		Tel:               tel,
+		FirstName:         strings.TrimSpace(p.FirstName),
+		LastName:          strings.TrimSpace(p.LastName),
+		AddressPrimary:    strings.TrimSpace(p.AddressPrimary),
+		Address:           strings.TrimSpace(p.Address),
+		Soi:               strings.TrimSpace(p.Soi),
+		Road:              strings.TrimSpace(p.Road),
+		SubDistrict:       strings.TrimSpace(p.SubDistrict),
+		District:          strings.TrimSpace(p.District),
+		Province:          strings.TrimSpace(p.Province),
+		ZipCode:           strings.TrimSpace(p.ZipCode),
+		Email:             strings.TrimSpace(p.Email),
+		Facebook:          strings.TrimSpace(p.Facebook),
+		BankID:            p.BankID,
+		BankAccountName:   strings.TrimSpace(p.BankAccountName),
+		BankAccountNumber: strings.TrimSpace(p.BankAccountNumber),
 	})
 	if err != nil {
 		if errors.Is(err, repository.ErrNoUserUpdated) {

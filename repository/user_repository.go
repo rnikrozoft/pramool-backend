@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/rnikrozoft/pramool-core/model/entity"
@@ -18,6 +19,9 @@ type UserRepository interface {
 	FindTelVerifyByTel(ctx context.Context, tel string) (*entity.TelVerify, error)
 	GetMyInformation(ctx context.Context, userID string) (*entity.User, error)
 	AddCreditByUserID(ctx context.Context, userID string, amount int64) error
+	DeductCreditIfEnoughTx(ctx context.Context, tx bun.Tx, userID string, amount int64) (int64, error)
+	// DeductListingDepositTx deducts credit when posting/reopening an auction; returns ok=false if insufficient.
+	DeductListingDepositTx(ctx context.Context, tx bun.Tx, userID string, amount int64) (ok bool, balanceBefore, balanceAfter int64, err error)
 
 	FindUserIDByTel(ctx context.Context, tel string) (string, error)
 	FindByID(ctx context.Context, userID string) (*entity.User, error)
@@ -29,6 +33,9 @@ type UserRepository interface {
 	SelectOTPBanUntil(ctx context.Context, tel string) (*time.Time, error)
 	RecordOTPTimeout(ctx context.Context, tel string) (*time.Time, int, error)
 	UpdateProfile(ctx context.Context, p entity.ProfileUpdate) error
+
+	// CountUserFulfillmentBlocks counts escrow obligations used only for withdrawal gating (GET /users).
+	CountUserFulfillmentBlocks(ctx context.Context, userID string) (pendingSellerShip int, pendingBuyerConfirm int, err error)
 }
 
 type user struct {
@@ -63,6 +70,41 @@ func (r user) AddCreditByUserID(ctx context.Context, userID string, amount int64
 	return err
 }
 
+func (r user) DeductCreditIfEnoughTx(ctx context.Context, tx bun.Tx, userID string, amount int64) (int64, error) {
+	if amount <= 0 {
+		return 0, nil
+	}
+	res, err := tx.NewRaw(`
+		UPDATE users
+		SET credit = credit - ?, updated_at = NOW()
+		WHERE user_id = ? AND COALESCE(credit, 0) >= ?
+	`, amount, userID, amount).Exec(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
+
+func (r user) DeductListingDepositTx(ctx context.Context, tx bun.Tx, userID string, amount int64) (bool, int64, int64, error) {
+	if amount <= 0 {
+		return false, 0, 0, fmt.Errorf("invalid deduct amount")
+	}
+	var after, before int64
+	err := tx.NewRaw(`
+		UPDATE users
+		SET credit = credit - ?, updated_at = NOW()
+		WHERE user_id = ? AND COALESCE(credit, 0) >= ?
+		RETURNING COALESCE(credit, 0), COALESCE(credit, 0) + ?
+	`, amount, userID, amount, amount).Scan(ctx, &after, &before)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, 0, 0, nil
+	}
+	if err != nil {
+		return false, 0, 0, err
+	}
+	return true, before, after, nil
+}
+
 func (r user) FindUserIDByTel(ctx context.Context, tel string) (string, error) {
 	var id string
 	err := r.bun.NewRaw(`SELECT user_id FROM users WHERE tel = ?`, tel).Scan(ctx, &id)
@@ -85,6 +127,9 @@ func (r user) FindByID(ctx context.Context, userID string) (*entity.User, error)
 		       COALESCE(zip_code, '') AS zip_code,
 		       COALESCE(email, '') AS email,
 		       COALESCE(facebook, '') AS facebook,
+		       COALESCE(bank_id, 0) AS bank_id,
+		       COALESCE(bank_account_name, '') AS bank_account_name,
+		       COALESCE(bank_account_number, '') AS bank_account_number,
 		       COALESCE(credit, 0) AS credit,
 		       created_at, updated_at
 		FROM users WHERE user_id = ?
@@ -204,10 +249,13 @@ func (r user) UpdateProfile(ctx context.Context, p entity.ProfileUpdate) error {
 			zip_code = ?,
 			email = ?,
 			facebook = ?,
+			bank_id = ?,
+			bank_account_name = ?,
+			bank_account_number = ?,
 			updated_at = NOW()
 		WHERE user_id = ?
 	`, p.Tel, p.FirstName, p.LastName, p.AddressPrimary, p.Address, p.Soi, p.Road,
-		p.SubDistrict, p.District, p.Province, p.ZipCode, p.Email, p.Facebook, p.UserID).Exec(ctx)
+		p.SubDistrict, p.District, p.Province, p.ZipCode, p.Email, p.Facebook, p.BankID, p.BankAccountName, p.BankAccountNumber, p.UserID).Exec(ctx)
 	if err != nil {
 		return err
 	}
@@ -219,4 +267,24 @@ func (r user) UpdateProfile(ctx context.Context, p entity.ProfileUpdate) error {
 		return ErrNoUserUpdated
 	}
 	return nil
+}
+
+func (r user) CountUserFulfillmentBlocks(ctx context.Context, userID string) (pendingSellerShip int, pendingBuyerConfirm int, err error) {
+	query := `
+	SELECT
+		(SELECT COUNT(*)::int FROM auctions a
+		 WHERE a.status = 'closed'
+		   AND a.seller_payout_at IS NULL
+		   AND COALESCE(NULLIF(TRIM(a.winner_id), ''), '') <> ''
+		   AND a.seller_id = ?
+		   AND a.seller_shipped_at IS NULL),
+		(SELECT COUNT(*)::int FROM auctions a
+		 WHERE a.status = 'closed'
+		   AND a.seller_payout_at IS NULL
+		   AND COALESCE(NULLIF(TRIM(a.winner_id), ''), '') <> ''
+		   AND a.winner_id = ?
+		   AND a.buyer_received_at IS NULL)
+	`
+	err = r.bun.NewRaw(query, userID, userID).Scan(ctx, &pendingSellerShip, &pendingBuyerConfirm)
+	return pendingSellerShip, pendingBuyerConfirm, err
 }

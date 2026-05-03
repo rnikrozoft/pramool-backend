@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"time"
 
 	"github.com/rnikrozoft/pramool-core/model/entity"
 	"github.com/uptrace/bun"
@@ -12,7 +13,12 @@ type AuctionRepository interface {
 	CreateAuctionWithTx(ctx context.Context, tx bun.Tx, auction entity.Auction) error
 	CreateAuctionImagesWithTx(ctx context.Context, tx bun.Tx, images []entity.AuctionImage) error
 	ListAuctionsBySellerID(ctx context.Context, sellerID string) ([]entity.Auction, error)
-	ListSellerEarnings(ctx context.Context, sellerID string, limit, offset int) ([]entity.SellerEarning, error)
+
+	LockAuctionBySellerForUpdate(ctx context.Context, tx bun.Tx, auctionID, sellerID string) (*entity.Auction, error)
+	CountAuctionBidsTx(ctx context.Context, tx bun.Tx, auctionID string) (int64, error)
+	CountHeldBidHoldsTx(ctx context.Context, tx bun.Tx, auctionID string) (int64, error)
+	ApplyAuctionReopenTx(ctx context.Context, tx bun.Tx, auctionID, sellerID string, endAt time.Time) (int64, error)
+	InsertListingDepositHoldTx(ctx context.Context, tx bun.Tx, sellerID, auctionID string, holdAmount, balanceBefore, balanceAfter int64, note string) error
 }
 
 type auctionRepo struct {
@@ -31,8 +37,8 @@ func (r auctionRepo) CreateAuctionWithTx(ctx context.Context, tx bun.Tx, auction
 	query := `
 	INSERT INTO auctions (
 		auction_id, seller_id, title, category, item_condition, description,
-		start_price, bid_step, current_bid, total_bids, status, end_at, cover_image_url
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		start_price, bid_step, current_bid, total_bids, status, end_at, allow_early_close, early_close_hold_amount, cover_image_url
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 	_, err := tx.NewRaw(query,
 		auction.AuctionID,
@@ -47,8 +53,23 @@ func (r auctionRepo) CreateAuctionWithTx(ctx context.Context, tx bun.Tx, auction
 		auction.TotalBids,
 		auction.Status,
 		auction.EndAt,
+		auction.AllowEarlyClose,
+		auction.EarlyCloseHoldAmount,
 		auction.CoverImageURL,
 	).Exec(ctx)
+	return err
+}
+
+func (r auctionRepo) InsertListingDepositHoldTx(ctx context.Context, tx bun.Tx, sellerID, auctionID string, holdAmount, balanceBefore, balanceAfter int64, note string) error {
+	if holdAmount <= 0 {
+		return nil
+	}
+	ledgerDelta := -holdAmount
+	query := `
+		INSERT INTO bid_transactions (user_id, auction_id, tx_type, amount, balance_before, balance_after, note, bid_amount)
+		VALUES (?, ?, 'listing_deposit_hold', ?, ?, ?, ?, ?)
+	`
+	_, err := tx.NewRaw(query, sellerID, auctionID, ledgerDelta, balanceBefore, balanceAfter, note, holdAmount).Exec(ctx)
 	return err
 }
 
@@ -66,7 +87,7 @@ func (r auctionRepo) ListAuctionsBySellerID(ctx context.Context, sellerID string
 	items := make([]entity.Auction, 0)
 	query := `
 	SELECT auction_id, seller_id, title, category, item_condition AS condition, description,
-		start_price, bid_step, current_bid, total_bids, status, end_at, cover_image_url,
+		start_price, bid_step, current_bid, total_bids, status, end_at, COALESCE(allow_early_close, FALSE) AS allow_early_close, cover_image_url,
 		created_at, updated_at
 	FROM auctions
 	WHERE seller_id = ?

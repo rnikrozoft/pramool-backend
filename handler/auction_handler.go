@@ -39,13 +39,14 @@ func (h AuctionHandler) CreateAuction(c *fiber.Ctx) error {
 	}
 
 	req := dto.CreateAuctionRequest{
-		Title:       c.FormValue("title"),
-		Category:    c.FormValue("category"),
-		Condition:   c.FormValue("condition"),
-		Description: c.FormValue("description"),
-		StartPrice:  startPrice,
-		BidStep:     bidStep,
-		EndAt:       c.FormValue("end_at"),
+		Title:           c.FormValue("title"),
+		Category:        c.FormValue("category"),
+		Condition:       c.FormValue("condition"),
+		Description:     c.FormValue("description"),
+		StartPrice:      startPrice,
+		BidStep:         bidStep,
+		EndAt:           c.FormValue("end_at"),
+		AllowEarlyClose: strings.EqualFold(strings.TrimSpace(c.FormValue("allow_early_close")), "true"),
 	}
 
 	form, err := c.MultipartForm()
@@ -100,18 +101,38 @@ func (h AuctionHandler) MyAuctions(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{"items": items})
 }
 
-func (h AuctionHandler) MyEarnings(c *fiber.Ctx) error {
+func (h AuctionHandler) ReopenAuction(c *fiber.Ctx) error {
 	sellerID, ok := c.Locals("user_id").(string)
 	if !ok {
 		return responseCommonError(c, errors.New("cannot claims user information"))
 	}
-	limit, _ := strconv.Atoi(c.Query("limit", "20"))
-	offset, _ := strconv.Atoi(c.Query("offset", "0"))
-	items, err := h.auctionService.ListSellerEarnings(c.Context(), sellerID, limit, offset)
+	auctionID := strings.TrimSpace(c.Params("id"))
+	if auctionID == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"message": "missing auction id"})
+	}
+	var body struct {
+		EndAt string `json:"end_at"`
+	}
+	if err := c.BodyParser(&body); err != nil || strings.TrimSpace(body.EndAt) == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"message": "end_at is required (RFC3339)"})
+	}
+	err := h.auctionService.ReopenAuctionNoBids(c.Context(), sellerID, auctionID, strings.TrimSpace(body.EndAt))
 	if err != nil {
+		if errors.Is(err, service.ErrAuctionReopenNotAllowed) {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"message": err.Error()})
+		}
+		if strings.Contains(strings.ToLower(err.Error()), "auction not found") {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"message": err.Error()})
+		}
+		if strings.Contains(strings.ToLower(err.Error()), "invalid end_at") || strings.Contains(strings.ToLower(err.Error()), "end_at must be in the future") {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"message": err.Error()})
+		}
+		if strings.Contains(strings.ToLower(err.Error()), "insufficient credit") {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"message": err.Error()})
+		}
 		return responseCommonError(c, err)
 	}
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{"items": items, "limit": limit, "offset": offset})
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{"auction_id": auctionID})
 }
 
 func validateImageFile(file *multipart.FileHeader) error {

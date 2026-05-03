@@ -54,15 +54,18 @@ func (r register) RegisterTelIfNotExist(ctx context.Context, tel string) error {
 func (r register) RegisterUserWithTx(ctx context.Context, tx bun.Tx, user entity.User) error {
 	query := `
 	INSERT INTO users (
-		user_id, tel, email, facebook, first_name, last_name, address_primary,
-		address, soi, road, sub_district, district, province, zip_code
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		user_id, tel, email, facebook, bank_id, bank_account_name, bank_account_number,
+		first_name, last_name, address_primary, address, soi, road, sub_district, district, province, zip_code
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 	_, err := tx.NewRaw(query,
 		user.UserID,
 		user.Tel,
 		user.Email,
 		user.Facebook,
+		user.BankID,
+		user.BankAccountName,
+		user.BankAccountNumber,
 		user.FirstName,
 		user.LastName,
 		user.AddressPrimary,
@@ -76,4 +79,3 @@ func (r register) RegisterUserWithTx(ctx context.Context, tx bun.Tx, user entity
 	).Exec(ctx)
 	return err
 }
-

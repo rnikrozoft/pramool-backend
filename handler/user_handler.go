@@ -40,7 +40,12 @@ func (h userHandler) GetMyInformation(c *fiber.Ctx) error {
 	if err != nil {
 		return responseCommonError(c, err)
 	}
-	return c.JSON(mapping.ToUserProfileResponse(*u))
+	sn, bn, err := h.userService.CountUserFulfillmentBlocks(c.Context(), u.UserID)
+	if err != nil {
+		return responseCommonError(c, err)
+	}
+	wb, wr := mapping.WithdrawalBlockedFromCounts(sn, bn)
+	return c.JSON(mapping.ToUserProfileResponse(*u, wb, wr))
 }
 
 func (h userHandler) IsTelAlreadyUsed(c *fiber.Ctx) error {
@@ -91,7 +96,12 @@ func (h userHandler) UpdateProfile(c *fiber.Ctx) error {
 	if err != nil {
 		return responseCommonError(c, err)
 	}
-	return c.JSON(mapping.ToUserProfileResponse(*u))
+	sn, bn, err := h.userService.CountUserFulfillmentBlocks(c.Context(), u.UserID)
+	if err != nil {
+		return responseCommonError(c, err)
+	}
+	wb, wr := mapping.WithdrawalBlockedFromCounts(sn, bn)
+	return c.JSON(mapping.ToUserProfileResponse(*u, wb, wr))
 }
 
 func (h userHandler) GetOnboardingStatus(c *fiber.Ctx) error {

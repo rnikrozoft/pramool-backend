@@ -28,3 +28,7 @@ func Internal(err error) *AppError {
 func BadRequest(err error) *AppError {
 	return New(err.Error(), fiber.StatusBadRequest)
 }
+
+func Forbidden(message string) *AppError {
+	return New(message, fiber.StatusForbidden)
+}
