@@ -34,6 +34,10 @@ for spec in "${SERVICES[@]}"; do
 
   (
     cd "$service_path"
+    # Seller auction uploads must land where core still serves /uploads (same paths in DB) until cloud storage.
+    if [[ "$service_dir" == "pramool-auction-service" ]]; then
+      export PRAMOOL_UPLOAD_ROOT="$BASE_DIR/pramool-core"
+    fi
     if [[ -f ".env" ]]; then
       set -a
       # shellcheck disable=SC1091
