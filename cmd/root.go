@@ -56,9 +56,10 @@ func init() {
 			DatabaseName: viper.GetString("DATABASE_NAME"),
 		},
 		Jwt: config.JwtConfig{
-			Issuer:     viper.GetString("JWT_ISSUER"),
-			Secret:     viper.GetString("JWT_SECRET"),
-			ExpireTime: viper.GetInt("JWT_EXPIRE_TIME"),
+			Issuer:            viper.GetString("JWT_ISSUER"),
+			Secret:            viper.GetString("JWT_SECRET"),
+			ExpireTime:        viper.GetInt("JWT_EXPIRE_TIME"),
+			RefreshExpireTime: viper.GetInt("JWT_REFRESH_EXPIRE_TIME"),
 		},
 		ThaiBulkSMS: config.ThaiBulkSMS{
 			AddressRequest: viper.GetString("ADDRESS_REQUEST"),

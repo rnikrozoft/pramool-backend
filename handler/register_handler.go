@@ -9,20 +9,32 @@ import (
 )
 
 type RegisterHandler struct {
-	validate              *validator.Validate
-	authenticationService service.AuthenticationService
-	registerService       service.RegisterService
+	validate               *validator.Validate
+	authenticationService  service.AuthenticationService
+	registerService        service.RegisterService
+	accessCookieMaxAgeSec  int
+	refreshCookieMaxAgeSec int
 }
 
 func NewRegisterHandler(
 	validate *validator.Validate,
 	authenticationService service.AuthenticationService,
 	registerService service.RegisterService,
+	accessCookieMaxAgeSec int,
+	refreshCookieMaxAgeSec int,
 ) RegisterHandler {
+	if accessCookieMaxAgeSec <= 0 {
+		accessCookieMaxAgeSec = 3600
+	}
+	if refreshCookieMaxAgeSec <= 0 {
+		refreshCookieMaxAgeSec = 3600 * 24 * 7
+	}
 	return RegisterHandler{
-		validate:              validate,
-		authenticationService: authenticationService,
-		registerService:       registerService,
+		validate:               validate,
+		authenticationService:  authenticationService,
+		registerService:        registerService,
+		accessCookieMaxAgeSec:  accessCookieMaxAgeSec,
+		refreshCookieMaxAgeSec: refreshCookieMaxAgeSec,
 	}
 }
 
@@ -50,18 +62,14 @@ func (h RegisterHandler) Register(c *fiber.Ctx) error {
 		return responseCommonError(c, err)
 	}
 
-	token, err := h.authenticationService.GenerateToken(user.UserID)
+	access, err := h.authenticationService.GenerateAccessToken(user.UserID)
 	if err != nil {
 		return responseCommonError(c, err)
 	}
-
-	c.Cookie(&fiber.Cookie{
-		Name:     "access_token",
-		Value:    token,
-		HTTPOnly: true,
-		SameSite: "Lax",
-		Path:     "/",
-		MaxAge:   3600,
-	})
+	refresh, err := h.authenticationService.GenerateRefreshToken(user.UserID)
+	if err != nil {
+		return responseCommonError(c, err)
+	}
+	ApplyAuthCookies(c, access, refresh, h.accessCookieMaxAgeSec, h.refreshCookieMaxAgeSec)
 	return c.SendStatus(fiber.StatusCreated)
 }

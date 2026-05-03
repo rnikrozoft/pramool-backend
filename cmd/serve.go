@@ -88,11 +88,22 @@ func serve() {
 	bankService := service.NewBankService(bankRepository)
 
 	authenticationService := service.NewAuthenticationService(appConfigs, userService)
-	authenticationHandler := handler.NewAuthenticationHandler(validate, authenticationService)
+	accessH := appConfigs.Jwt.ExpireTime
+	if accessH <= 0 {
+		accessH = 1
+	}
+	accessCookieSec := accessH * 3600
+	refreshH := appConfigs.Jwt.RefreshExpireTime
+	if refreshH <= 0 {
+		refreshH = 168
+	}
+	refreshCookieSec := refreshH * 3600
+
+	authenticationHandler := handler.NewAuthenticationHandler(validate, authenticationService, accessCookieSec, refreshCookieSec)
 
 	registerRepository := repository.NewRegisterRepository(conn)
 	registerService := service.NewRegisterService(registerRepository)
-	registerHandler := handler.NewRegisterHandler(validate, authenticationService, registerService)
+	registerHandler := handler.NewRegisterHandler(validate, authenticationService, registerService, accessCookieSec, refreshCookieSec)
 
 	otpService := service.NewOTPService(
 		logger,
@@ -121,6 +132,7 @@ func serve() {
 	app.Post("/otp/timeout", otpHandler.RecordTimeout)
 
 	app.Post("/login/tel", authenticationHandler.LoginByTel)
+	app.Post("/auth/refresh", authenticationHandler.Refresh)
 	app.Post("/logout", authenticationHandler.Logout)
 
 	app.Listen(":3001")

@@ -25,6 +25,9 @@ func (m Middleware) JWTMiddleware(c *fiber.Ctx) error {
 	var userID string
 	if err == nil && token.Valid {
 		if claims, ok := token.Claims.(*model.CustomClaims); ok {
+			if claims.TokenUse == model.TokenUseRefresh {
+				return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"message": "use access token, not refresh token"})
+			}
 			userID = strings.TrimSpace(claims.UserID)
 			if userID == "" {
 				userID = strings.TrimSpace(claims.RegisteredClaims.Subject)

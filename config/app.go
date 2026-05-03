@@ -18,7 +18,9 @@ type DatabaseConfig struct {
 type JwtConfig struct {
 	Issuer     string
 	Secret     string
-	ExpireTime int
+	ExpireTime int // access token TTL (hours)
+	// RefreshExpireTime is refresh token TTL (hours). If 0, defaults to 168 (7d) in cmd/root.
+	RefreshExpireTime int
 }
 
 type ThaiBulkSMS struct {
