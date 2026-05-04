@@ -32,3 +32,7 @@ func BadRequest(err error) *AppError {
 func Forbidden(message string) *AppError {
 	return New(message, fiber.StatusForbidden)
 }
+
+func Unauthorized(message string) *AppError {
+	return New(message, fiber.StatusUnauthorized)
+}

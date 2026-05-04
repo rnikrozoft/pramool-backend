@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"strings"
+
 	"github.com/go-playground/validator/v10"
 	"github.com/gofiber/fiber/v2"
 	"github.com/rnikrozoft/pramool-core/model/dto"
@@ -8,8 +10,8 @@ import (
 )
 
 type AuthenticationHandler struct {
-	validate              *validator.Validate
-	authenticationService service.AuthenticationService
+	validate               *validator.Validate
+	authenticationService  service.AuthenticationService
 	accessCookieMaxAgeSec  int
 	refreshCookieMaxAgeSec int
 }
@@ -28,19 +30,23 @@ func NewAuthenticationHandler(
 	}
 	return AuthenticationHandler{
 		validate:               validate,
-		authenticationService:   authenticationService,
-		accessCookieMaxAgeSec:   accessCookieMaxAgeSec,
+		authenticationService:  authenticationService,
+		accessCookieMaxAgeSec:  accessCookieMaxAgeSec,
 		refreshCookieMaxAgeSec: refreshCookieMaxAgeSec,
 	}
 }
 
 func (h AuthenticationHandler) LoginByTel(c *fiber.Ctx) error {
-	req := new(dto.RequestOTP)
+	req := new(dto.LoginTelRequest)
 	if err := validate(c, h.validate, req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(err)
 	}
 
-	tokens, err := h.authenticationService.LoginByTel(c.Context(), req.Tel)
+	ident := strings.TrimSpace(req.Login)
+	if ident == "" {
+		ident = strings.TrimSpace(req.Tel)
+	}
+	tokens, err := h.authenticationService.Login(c.Context(), ident, req.Password)
 	if err != nil {
 		return responseCommonError(c, err)
 	}

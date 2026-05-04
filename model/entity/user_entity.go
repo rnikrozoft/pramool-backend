@@ -21,6 +21,7 @@ type User struct {
 	Province          string    `db:"province"`
 	ZipCode           string    `db:"zip_code"`
 	Credit            int64     `db:"credit"`
+	PasswordHash      string    `db:"password_hash"`
 	CreatedAt         time.Time `db:"created_at"`
 	UpdatedAt         time.Time `db:"updated_at"`
 }

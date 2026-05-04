@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/rnikrozoft/pramool-core/model/entity"
@@ -27,6 +28,10 @@ type UserRepository interface {
 	FindByID(ctx context.Context, userID string) (*entity.User, error)
 	Upsert(ctx context.Context, u *entity.User) error
 	IsTelAlreadyUsed(ctx context.Context, tel string) (bool, error)
+	// ExistsRegisteredUserID is true when users.user_id already exists (national ID taken).
+	ExistsRegisteredUserID(ctx context.Context, userID string) (bool, error)
+	// IsEmailTakenByOtherTel is true if email is used on another account (users or tel_verify with a different tel).
+	IsEmailTakenByOtherTel(ctx context.Context, email, requestTel string) (bool, error)
 	IsTelUsedByOtherUser(ctx context.Context, userID, tel string) (bool, error)
 	HasUserRecordForSubject(ctx context.Context, subject string) (bool, error)
 	ResetExpiredOTPBanIfNeeded(ctx context.Context, tel string) error
@@ -36,6 +41,12 @@ type UserRepository interface {
 
 	// CountUserFulfillmentBlocks counts escrow obligations used only for withdrawal gating (GET /users).
 	CountUserFulfillmentBlocks(ctx context.Context, userID string) (pendingSellerShip int, pendingBuyerConfirm int, err error)
+
+	// GetLoginPasswordHash returns stored bcrypt hash for tel (users row preferred, else tel_verify).
+	GetLoginPasswordHash(ctx context.Context, tel string) (hash string, err error)
+
+	// FindTelByEmail returns the phone linked to email (users.email, else tel_verify.signup_email).
+	FindTelByEmail(ctx context.Context, email string) (tel string, err error)
 }
 
 type user struct {
@@ -55,7 +66,11 @@ func (r user) FindByTel(ctx context.Context, tel string) (*entity.User, error) {
 
 func (r user) FindTelVerifyByTel(ctx context.Context, tel string) (*entity.TelVerify, error) {
 	tv := new(entity.TelVerify)
-	query := `SELECT tel FROM tel_verify WHERE tel = ?`
+	query := `
+		SELECT tel,
+		       COALESCE(signup_first_name, '') AS signup_first_name,
+		       COALESCE(signup_last_name, '') AS signup_last_name
+		FROM tel_verify WHERE tel = ?`
 	err := r.bun.NewRaw(query, tel).Scan(ctx, tv)
 	return tv, err
 }
@@ -164,8 +179,50 @@ func (r user) Upsert(ctx context.Context, u *entity.User) error {
 }
 
 func (r user) IsTelAlreadyUsed(ctx context.Context, tel string) (bool, error) {
+	tel = strings.TrimSpace(tel)
 	var exists bool
-	err := r.bun.NewRaw(`SELECT EXISTS(SELECT 1 FROM users WHERE tel = ?)`, tel).Scan(ctx, &exists)
+	err := r.bun.NewRaw(`SELECT EXISTS(SELECT 1 FROM users WHERE TRIM(tel) = ?)`, tel).Scan(ctx, &exists)
+	return exists, err
+}
+
+func (r user) ExistsRegisteredUserID(ctx context.Context, userID string) (bool, error) {
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return false, nil
+	}
+	var exists bool
+	err := r.bun.NewRaw(`SELECT EXISTS(SELECT 1 FROM users WHERE user_id = ?)`, userID).Scan(ctx, &exists)
+	return exists, err
+}
+
+func (r user) IsEmailTakenByOtherTel(ctx context.Context, email, requestTel string) (bool, error) {
+	norm := strings.ToLower(strings.TrimSpace(email))
+	if norm == "" {
+		return false, nil
+	}
+	requestTel = strings.TrimSpace(requestTel)
+
+	var exists bool
+	err := r.bun.NewRaw(`
+		SELECT EXISTS(
+			SELECT 1 FROM users
+			WHERE LOWER(TRIM(email)) = ?
+			  AND NULLIF(TRIM(email), '') IS NOT NULL
+		)`, norm).Scan(ctx, &exists)
+	if err != nil {
+		return false, err
+	}
+	if exists {
+		return true, nil
+	}
+
+	err = r.bun.NewRaw(`
+		SELECT EXISTS(
+			SELECT 1 FROM tel_verify
+			WHERE LOWER(TRIM(signup_email)) = ?
+			  AND NULLIF(TRIM(signup_email), '') IS NOT NULL
+			  AND TRIM(tel) <> ?
+		)`, norm, requestTel).Scan(ctx, &exists)
 	return exists, err
 }
 
@@ -287,4 +344,63 @@ func (r user) CountUserFulfillmentBlocks(ctx context.Context, userID string) (pe
 	`
 	err = r.bun.NewRaw(query, userID, userID).Scan(ctx, &pendingSellerShip, &pendingBuyerConfirm)
 	return pendingSellerShip, pendingBuyerConfirm, err
+}
+
+func (r user) FindTelByEmail(ctx context.Context, email string) (string, error) {
+	email = strings.TrimSpace(strings.ToLower(email))
+	if email == "" {
+		return "", sql.ErrNoRows
+	}
+	var tel string
+	err := r.bun.NewRaw(`
+		SELECT tel FROM users
+		WHERE LOWER(TRIM(email)) = ? AND NULLIF(TRIM(email), '') IS NOT NULL
+		LIMIT 1
+	`, email).Scan(ctx, &tel)
+	if err == nil {
+		tel = strings.TrimSpace(tel)
+		if tel != "" {
+			return tel, nil
+		}
+	}
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return "", err
+	}
+	err = r.bun.NewRaw(`
+		SELECT tel FROM tel_verify
+		WHERE LOWER(TRIM(signup_email)) = ? AND NULLIF(TRIM(signup_email), '') IS NOT NULL
+		LIMIT 1
+	`, email).Scan(ctx, &tel)
+	if err != nil {
+		return "", err
+	}
+	tel = strings.TrimSpace(tel)
+	if tel == "" {
+		return "", sql.ErrNoRows
+	}
+	return tel, nil
+}
+
+func (r user) GetLoginPasswordHash(ctx context.Context, tel string) (string, error) {
+	tel = strings.TrimSpace(tel)
+	var uHash sql.NullString
+	err := r.bun.NewRaw(`SELECT password_hash FROM users WHERE tel = ?`, tel).Scan(ctx, &uHash)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return "", err
+	}
+	if err == nil && uHash.Valid && strings.TrimSpace(uHash.String) != "" {
+		return strings.TrimSpace(uHash.String), nil
+	}
+	var tHash sql.NullString
+	err = r.bun.NewRaw(`SELECT password_hash FROM tel_verify WHERE tel = ?`, tel).Scan(ctx, &tHash)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", nil
+		}
+		return "", err
+	}
+	if tHash.Valid {
+		return strings.TrimSpace(tHash.String), nil
+	}
+	return "", nil
 }

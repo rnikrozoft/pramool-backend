@@ -2,12 +2,16 @@ package service
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"golang.org/x/crypto/bcrypt"
+
 	"github.com/rnikrozoft/pramool-core/config"
+	"github.com/rnikrozoft/pramool-core/exception"
 	"github.com/rnikrozoft/pramool-core/model"
 )
 
@@ -25,7 +29,8 @@ type AuthenticationService interface {
 	GenerateAccessToken(userID string) (string, error)
 	GenerateRefreshToken(userID string) (string, error)
 	ValidateRefreshToken(tokenString string) (userID string, err error)
-	LoginByTel(ctx context.Context, tel string) (LoginTokens, error)
+	LoginByTel(ctx context.Context, tel, password string) (LoginTokens, error)
+	Login(ctx context.Context, identifier, password string) (LoginTokens, error)
 }
 
 type authentication struct {
@@ -117,8 +122,38 @@ func (service authentication) ValidateRefreshToken(tokenString string) (string, 
 	return userID, nil
 }
 
-func (service authentication) LoginByTel(ctx context.Context, tel string) (LoginTokens, error) {
+func (service authentication) Login(ctx context.Context, identifier, password string) (LoginTokens, error) {
 	var empty LoginTokens
+	identifier = strings.TrimSpace(identifier)
+	if identifier == "" {
+		return empty, exception.BadRequest(errors.New("กรุณากรอกเบอร์โทรศัพท์หรืออีเมล"))
+	}
+	tel, err := service.userService.ResolveLoginIdentifier(ctx, identifier)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return empty, errInvalidCredentials()
+		}
+		return empty, err
+	}
+	return service.LoginByTel(ctx, tel, password)
+}
+
+func (service authentication) LoginByTel(ctx context.Context, tel, password string) (LoginTokens, error) {
+	var empty LoginTokens
+	tel = strings.TrimSpace(tel)
+	password = strings.TrimSpace(password)
+	hash, err := service.userService.GetLoginPasswordHash(ctx, tel)
+	if err != nil {
+		return empty, err
+	}
+	if strings.TrimSpace(hash) != "" {
+		if password == "" {
+			return empty, errPasswordRequired()
+		}
+		if err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)); err != nil {
+			return empty, errInvalidCredentials()
+		}
+	}
 	sub, err := service.userService.FindUserIDByTelWithFallback(ctx, tel)
 	if err != nil {
 		return empty, err

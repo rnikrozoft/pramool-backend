@@ -13,6 +13,8 @@ import (
 
 type UserService interface {
 	IsTelAlreadyUsed(ctx context.Context, tel string) (bool, error)
+	ExistsRegisteredUserID(ctx context.Context, userID string) (bool, error)
+	IsEmailTakenByOtherTel(ctx context.Context, email, requestTel string) (bool, error)
 	GetMyInfo(ctx context.Context, userID string) (*entity.User, error)
 	CountUserFulfillmentBlocks(ctx context.Context, userID string) (pendingSellerShip int, pendingBuyerConfirm int, err error)
 	FindUserIDByTelWithFallback(ctx context.Context, tel string) (string, error)
@@ -21,6 +23,8 @@ type UserService interface {
 	SaveUser(ctx context.Context, u *entity.User) error
 	GetActiveOTPBanUntil(ctx context.Context, tel string) (*time.Time, error)
 	RecordOTPTimeout(ctx context.Context, tel string) (*time.Time, int, error)
+	GetLoginPasswordHash(ctx context.Context, tel string) (string, error)
+	ResolveLoginIdentifier(ctx context.Context, raw string) (tel string, err error)
 }
 
 type user struct {
@@ -41,6 +45,14 @@ func (s user) IsTelAlreadyUsed(ctx context.Context, tel string) (bool, error) {
 	return s.userRepository.IsTelAlreadyUsed(ctx, tel)
 }
 
+func (s user) ExistsRegisteredUserID(ctx context.Context, userID string) (bool, error) {
+	return s.userRepository.ExistsRegisteredUserID(ctx, userID)
+}
+
+func (s user) IsEmailTakenByOtherTel(ctx context.Context, email, requestTel string) (bool, error) {
+	return s.userRepository.IsEmailTakenByOtherTel(ctx, email, requestTel)
+}
+
 func (s user) loadUserOrTelVerify(ctx context.Context, userID string) (*entity.User, error) {
 	u, err := s.userRepository.FindByID(ctx, userID)
 	if err == nil {
@@ -53,7 +65,12 @@ func (s user) loadUserOrTelVerify(ctx context.Context, userID string) (*entity.U
 	if err != nil {
 		return nil, err
 	}
-	return &entity.User{UserID: userID, Tel: tv.Tel}, nil
+	return &entity.User{
+		UserID:    userID,
+		Tel:       tv.Tel,
+		FirstName: tv.SignupFirstName,
+		LastName:  tv.SignupLastName,
+	}, nil
 }
 
 func (s user) GetMyInfo(ctx context.Context, userID string) (*entity.User, error) {
@@ -166,4 +183,46 @@ func (s user) GetActiveOTPBanUntil(ctx context.Context, tel string) (*time.Time,
 
 func (s user) RecordOTPTimeout(ctx context.Context, tel string) (*time.Time, int, error) {
 	return s.userRepository.RecordOTPTimeout(ctx, strings.TrimSpace(tel))
+}
+
+func (s user) GetLoginPasswordHash(ctx context.Context, tel string) (string, error) {
+	return s.userRepository.GetLoginPasswordHash(ctx, strings.TrimSpace(tel))
+}
+
+func normalizeThaiLocalTel(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		if r >= '0' && r <= '9' {
+			b.WriteRune(r)
+		}
+	}
+	d := b.String()
+	if len(d) >= 10 {
+		return d[len(d)-10:]
+	}
+	if len(d) == 9 {
+		return "0" + d
+	}
+	if len(d) > 0 && len(d) < 9 {
+		return d
+	}
+	return d
+}
+
+func (s user) ResolveLoginIdentifier(ctx context.Context, raw string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", sql.ErrNoRows
+	}
+	if strings.Contains(raw, "@") {
+		return s.userRepository.FindTelByEmail(ctx, raw)
+	}
+	tel := normalizeThaiLocalTel(raw)
+	if tel == "" || len(tel) < 9 {
+		return "", sql.ErrNoRows
+	}
+	if len(tel) > 10 {
+		tel = tel[len(tel)-10:]
+	}
+	return tel, nil
 }

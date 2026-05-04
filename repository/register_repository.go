@@ -2,6 +2,8 @@ package repository
 
 import (
 	"context"
+	"database/sql"
+	"strings"
 
 	"github.com/rnikrozoft/pramool-core/model/entity"
 	"github.com/uptrace/bun"
@@ -14,6 +16,11 @@ type Register interface {
 	RegisterTel(ctx context.Context, tel string) error
 	RegisterTelIfNotExist(ctx context.Context, tel string) error
 	RegisterUserWithTx(ctx context.Context, tx bun.Tx, user entity.User) error
+
+	UpsertTelVerifySignup(ctx context.Context, firstName, lastName, tel, email, passwordHash string) error
+	GetPasswordHashFromTelVerify(ctx context.Context, tel string) (string, error)
+	// TelVerifyHasPassword is true when this tel already completed signup step (password set); must login, not POST /auth/signup again.
+	TelVerifyHasPassword(ctx context.Context, tel string) (bool, error)
 }
 
 type register struct {
@@ -55,8 +62,9 @@ func (r register) RegisterUserWithTx(ctx context.Context, tx bun.Tx, user entity
 	query := `
 	INSERT INTO users (
 		user_id, tel, email, facebook, bank_id, bank_account_name, bank_account_number,
-		first_name, last_name, address_primary, address, soi, road, sub_district, district, province, zip_code
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		first_name, last_name, address_primary, address, soi, road, sub_district, district, province, zip_code,
+		password_hash
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 	_, err := tx.NewRaw(query,
 		user.UserID,
@@ -76,6 +84,58 @@ func (r register) RegisterUserWithTx(ctx context.Context, tx bun.Tx, user entity
 		user.District,
 		user.Province,
 		user.ZipCode,
+		nullIfEmpty(user.PasswordHash),
 	).Exec(ctx)
 	return err
+}
+
+func nullIfEmpty(s string) interface{} {
+	if strings.TrimSpace(s) == "" {
+		return nil
+	}
+	return strings.TrimSpace(s)
+}
+
+func (r register) UpsertTelVerifySignup(ctx context.Context, firstName, lastName, tel, email, passwordHash string) error {
+	_, err := r.bun.NewRaw(`
+		INSERT INTO tel_verify (tel, signup_first_name, signup_last_name, signup_email, password_hash)
+		VALUES (?, ?, ?, ?, ?)
+		ON CONFLICT (tel) DO UPDATE SET
+			signup_first_name = EXCLUDED.signup_first_name,
+			signup_last_name = EXCLUDED.signup_last_name,
+			signup_email = EXCLUDED.signup_email,
+			password_hash = EXCLUDED.password_hash
+	`, tel, firstName, lastName, email, passwordHash).Exec(ctx)
+	return err
+}
+
+func (r register) GetPasswordHashFromTelVerify(ctx context.Context, tel string) (string, error) {
+	var h sql.NullString
+	err := r.bun.NewRaw(`SELECT password_hash FROM tel_verify WHERE tel = ?`, tel).Scan(ctx, &h)
+	if err != nil {
+		return "", err
+	}
+	if !h.Valid {
+		return "", nil
+	}
+	return h.String, nil
+}
+
+func (r register) TelVerifyHasPassword(ctx context.Context, tel string) (bool, error) {
+	tel = strings.TrimSpace(tel)
+	if tel == "" {
+		return false, nil
+	}
+	var h sql.NullString
+	err := r.bun.NewRaw(`SELECT password_hash FROM tel_verify WHERE TRIM(tel) = ?`, tel).Scan(ctx, &h)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	if !h.Valid {
+		return false, nil
+	}
+	return strings.TrimSpace(h.String) != "", nil
 }
