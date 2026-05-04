@@ -126,7 +126,8 @@ AUCTION_PORT=3103
 POSTGREST_PORT=3104
 EOF
 
-chmod 0600 "$DEPLOY_DIR/.env"
+# Mount is visible inside the container as uid appuser; root-only mode (0600) causes "permission denied".
+chmod 0644 "$DEPLOY_DIR/.env"
 
 echo "[6/10] Build images"
 cd "$DEPLOY_DIR"
@@ -155,7 +156,7 @@ echo "[10/10] Done"
 docker compose ps
 
 echo ""
-echo "Wrote secrets to: $DEPLOY_DIR/.env (mode 600)"
+echo "Wrote secrets to: $DEPLOY_DIR/.env (mode 644 so non-root app user in containers can read it)"
 echo "Database password (postgres user): $DB_PASS"
 echo "Tail logs:  cd $DEPLOY_DIR && docker compose logs -f --tail=120"
 echo "Core:       http://$(hostname -I 2>/dev/null | awk '{print $1}' || echo '<this-host>'):3001"

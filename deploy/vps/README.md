@@ -58,7 +58,10 @@ cd /opt/pramool/pramool-core/deploy/vps
 cp .env.example .env
 ```
 
-Edit `.env`: set `DATABASE_*` / DSNs to hostname **`postgres`** (the Compose service), not `localhost`. Run migrations before or after first boot:
+Edit `.env`: set `DATABASE_*` / DSNs to hostname **`postgres`** (the Compose service), not `localhost`.  
+Use **`chmod 0644 .env`** after saving so the non-root user inside the `pramool-core` image can read `/app/.env` (root-only `0600` causes `permission denied`).
+
+Run migrations before or after first boot:
 
 ```bash
 docker compose build
