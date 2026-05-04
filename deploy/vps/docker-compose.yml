@@ -1,4 +1,22 @@
 services:
+  postgres:
+    container_name: pramool-postgres
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${DATABASE_USERNAME:-postgres}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-postgres}
+      POSTGRES_DB: ${DATABASE_NAME:-pramool}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DATABASE_USERNAME:-postgres} -d ${DATABASE_NAME:-pramool}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+    networks:
+      - pramool-net
+
   pramool-core:
     container_name: pramool-core
     build:
@@ -23,7 +41,11 @@ services:
     ports:
       - "${CORE_PORT:-3001}:3001"
     volumes:
+      - ./.env:/app/.env:ro
       - uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
     networks:
       - pramool-net
@@ -46,6 +68,9 @@ services:
       CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS}
     ports:
       - "${WALLET_PORT:-3102}:3102"
+    depends_on:
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
     networks:
       - pramool-net
@@ -73,7 +98,10 @@ services:
       - uploads:/srv/pramool/uploads
     restart: unless-stopped
     depends_on:
-      - pramool-wallet-service
+      postgres:
+        condition: service_healthy
+      pramool-wallet-service:
+        condition: service_started
     networks:
       - pramool-net
 
@@ -92,11 +120,15 @@ services:
       PGRST_DB_POOL: ${PGRST_DB_POOL:-10}
     ports:
       - "${POSTGREST_PORT:-3104}:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
     networks:
       - pramool-net
 
 volumes:
+  pgdata:
   uploads:
 
 networks:
