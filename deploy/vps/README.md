@@ -6,6 +6,7 @@ This stack deploys:
 - `pramool-core`
 - `pramool-wallet-service`
 - `pramool-auction-service`
+- `pramool-frontend` (Next.js `pramool.in.th`, **built with** `NEXT_PUBLIC_*` API URLs)
 - `postgrest`
 
 ## Option A — one command (recommended for a fresh VPS)
@@ -25,31 +26,35 @@ INSTALL_ROOT=/opt/pramool CORE_BRANCH=develop bash bootstrap-pramool.sh
 
 The script will:
 
-- Install Docker + Compose and open ports 3001, 3102–3104 (plus SSH / optional 80–443).
-- Clone the three repos over **HTTPS** (no GitHub SSH key on the VPS).
-- Write `deploy/vps/.env` with generated `JWT_SECRET`, DB password, and internal API keys.
-- Start Postgres, run `pramool-core migrate`, then `docker compose up -d`.
+- Install Docker + Compose and open ports 3000, 3001, 3102–3104 (plus SSH / optional 80–443).
+- Clone **four** repos over **HTTPS** (no GitHub SSH key on the VPS): `pramool-core`, `pramool-wallet-service`, `pramool-auction-service`, `pramool.in.th`.
+- Write `deploy/vps/.env` with generated `JWT_SECRET`, DB password, internal API keys, and `NEXT_PUBLIC_*` URLs (public/LAN IP from `api.ipify.org` or `hostname -I`).
+- Build all images (including the Next.js app with API base URLs), start Postgres, run `pramool-core migrate`, then `docker compose up -d`.
+
+Open the site: **`http://<server-ip>:3000`**
 
 Override branches if needed:
 
 ```bash
-CORE_BRANCH=develop WALLET_BRANCH=main AUCTION_BRANCH=main bash bootstrap-pramool.sh
+CORE_BRANCH=develop FRONTEND_BRANCH=main \
+  WALLET_BRANCH=main AUCTION_BRANCH=main bash bootstrap-pramool.sh
 ```
 
 ## Option B — manual
 
 ### 1) Repo layout on VPS
 
-Keep these repos as siblings:
+Keep these repos as **siblings**:
 
 ```text
 /opt/pramool/
   pramool-core/
   pramool-wallet-service/
   pramool-auction-service/
+  pramool.in.th/
 ```
 
-The compose file relies on relative build contexts to sibling repos.
+The compose file uses relative `build.context` to each repo.
 
 ### 2) Environment
 
@@ -58,10 +63,11 @@ cd /opt/pramool/pramool-core/deploy/vps
 cp .env.example .env
 ```
 
-Edit `.env`: set `DATABASE_*` / DSNs to hostname **`postgres`** (the Compose service), not `localhost`.  
+Edit `.env`: set `DATABASE_*` / DSNs to hostname **`postgres`**, and set **`NEXT_PUBLIC_*`** to the URLs the **browser** will use (same host as the site, with ports 3001 / 3102 / 3103 for APIs). **CORS** must list your frontend origin (e.g. `http://your-ip:3000`).
+
 Use **`chmod 0644 .env`** after saving so the non-root user inside the `pramool-core` image can read `/app/.env` (root-only `0600` causes `permission denied`).
 
-Run migrations before or after first boot:
+Build and start:
 
 ```bash
 docker compose build
@@ -71,10 +77,18 @@ docker compose run --rm pramool-core ./pramool-core migrate
 docker compose up -d
 ```
 
+**Changing `NEXT_PUBLIC_*`:** values are baked at **`docker compose build`** time for the frontend. After edits:
+
+```bash
+docker compose build pramool-frontend --no-cache
+docker compose up -d pramool-frontend
+```
+
 ### 3) Verify
 
 ```bash
 docker compose ps
+docker compose logs -f pramool-frontend
 docker compose logs -f pramool-core
 ```
 

@@ -105,6 +105,29 @@ services:
     networks:
       - pramool-net
 
+  pramool-frontend:
+    container_name: pramool-frontend
+    build:
+      context: ../../../pramool.in.th
+      dockerfile: Dockerfile.vps
+      args:
+        NEXT_PUBLIC_CORE_API_BASE_URL: ${NEXT_PUBLIC_CORE_API_BASE_URL}
+        NEXT_PUBLIC_USER_API_BASE_URL: ${NEXT_PUBLIC_USER_API_BASE_URL}
+        NEXT_PUBLIC_WALLET_API_BASE_URL: ${NEXT_PUBLIC_WALLET_API_BASE_URL}
+        NEXT_PUBLIC_AUCTION_REALTIME_BASE_URL: ${NEXT_PUBLIC_AUCTION_REALTIME_BASE_URL}
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    depends_on:
+      pramool-core:
+        condition: service_started
+      pramool-wallet-service:
+        condition: service_started
+      pramool-auction-service:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - pramool-net
+
   postgrest:
     container_name: postgrest
     image: postgrest/postgrest:v13.0.4
