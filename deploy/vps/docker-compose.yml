@@ -108,13 +108,15 @@ services:
   pramool-frontend:
     container_name: pramool-frontend
     build:
-      context: ../../../pramool.in.th
+      # Default: sibling at /opt/pramool/pramool.in.th. If you cloned inside pramool-core, set in .env:
+      # FRONTEND_BUILD_CONTEXT=../../pramool.in.th
+      context: ${FRONTEND_BUILD_CONTEXT:-../../../pramool.in.th}
       dockerfile: Dockerfile.vps
       args:
-        NEXT_PUBLIC_CORE_API_BASE_URL: ${NEXT_PUBLIC_CORE_API_BASE_URL}
-        NEXT_PUBLIC_USER_API_BASE_URL: ${NEXT_PUBLIC_USER_API_BASE_URL}
-        NEXT_PUBLIC_WALLET_API_BASE_URL: ${NEXT_PUBLIC_WALLET_API_BASE_URL}
-        NEXT_PUBLIC_AUCTION_REALTIME_BASE_URL: ${NEXT_PUBLIC_AUCTION_REALTIME_BASE_URL}
+        NEXT_PUBLIC_CORE_API_BASE_URL: ${NEXT_PUBLIC_CORE_API_BASE_URL:-http://127.0.0.1:3001}
+        NEXT_PUBLIC_USER_API_BASE_URL: ${NEXT_PUBLIC_USER_API_BASE_URL:-http://127.0.0.1:3001}
+        NEXT_PUBLIC_WALLET_API_BASE_URL: ${NEXT_PUBLIC_WALLET_API_BASE_URL:-http://127.0.0.1:3102}
+        NEXT_PUBLIC_AUCTION_REALTIME_BASE_URL: ${NEXT_PUBLIC_AUCTION_REALTIME_BASE_URL:-http://127.0.0.1:3103}
     ports:
       - "${FRONTEND_PORT:-3000}:3000"
     depends_on:

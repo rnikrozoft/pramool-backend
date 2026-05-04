@@ -44,7 +44,7 @@ CORE_BRANCH=develop FRONTEND_BRANCH=main \
 
 ### 1) Repo layout on VPS
 
-Keep these repos as **siblings**:
+Clone **from `/opt/pramool`** (not from inside `pramool-core`), so all repos are **siblings**:
 
 ```text
 /opt/pramool/
@@ -54,7 +54,7 @@ Keep these repos as **siblings**:
   pramool.in.th/
 ```
 
-The compose file uses relative `build.context` to each repo.
+The compose file uses relative `build.context` to each repo. If you already cloned `pramool.in.th` under `pramool-core/`, either run `mv /opt/pramool/pramool-core/pramool.in.th /opt/pramool/`, or set in `.env`: `FRONTEND_BUILD_CONTEXT=../../pramool.in.th` (path is relative to `deploy/vps`).
 
 ### 2) Environment
 
