@@ -11,12 +11,6 @@
 		},
 		{
 			"path": "../pramool.in.th"
-		},
-		{
-			"path": "../pramool-core-backoffice"
-		},
-		{
-			"path": "../pramool-backoffice"
 		}
 	]
 }

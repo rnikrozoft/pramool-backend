@@ -8,7 +8,6 @@ BASE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 # One entry per line: "dirname" (go run .) or "dirname subcommand" (go run . subcommand)
 SERVICES=(
   "pramool-core serve"
-  "pramool-core-backoffice serve"
   "pramool-wallet-service"
   "pramool-auction-service"
 )

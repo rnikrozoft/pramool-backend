@@ -6,12 +6,12 @@ package cmd
 import (
 	"database/sql"
 	"fmt"
-	"log"
 	"os"
+	"strconv"
 
+	"github.com/joho/godotenv"
 	"github.com/rnikrozoft/pramool-core/config"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/dialect/pgdialect"
 	"github.com/uptrace/bun/driver/pgdriver"
@@ -39,35 +39,30 @@ var conn *bun.DB
 var appConfigs config.AppConfigs
 
 func init() {
-	viper.SetConfigName(".env")
-	viper.SetConfigType("env")
-	viper.AddConfigPath(".")
-
-	if err := viper.ReadInConfig(); err != nil {
-		log.Fatalf("Error reading config file, %s", err)
-	}
+	// Keep behavior consistent with other services: load .env if present, but do not require it.
+	_ = godotenv.Load()
 
 	appConfigs = config.AppConfigs{
 		Database: config.DatabaseConfig{
-			Host:         viper.GetString("DATABASE_HOST"),
-			Port:         viper.GetString("DATABASE_PORT"),
-			Username:     viper.GetString("DATABASE_USERNAME"),
-			Password:     viper.GetString("DATABASE_PASSWORD"),
-			DatabaseName: viper.GetString("DATABASE_NAME"),
+			Host:         os.Getenv("DATABASE_HOST"),
+			Port:         os.Getenv("DATABASE_PORT"),
+			Username:     os.Getenv("DATABASE_USERNAME"),
+			Password:     os.Getenv("DATABASE_PASSWORD"),
+			DatabaseName: os.Getenv("DATABASE_NAME"),
 		},
 		Jwt: config.JwtConfig{
-			Issuer:            viper.GetString("JWT_ISSUER"),
-			Secret:            viper.GetString("JWT_SECRET"),
-			ExpireTime:        viper.GetInt("JWT_EXPIRE_TIME"),
-			RefreshExpireTime: viper.GetInt("JWT_REFRESH_EXPIRE_TIME"),
+			Issuer:            os.Getenv("JWT_ISSUER"),
+			Secret:            os.Getenv("JWT_SECRET"),
+			ExpireTime:        envInt("JWT_EXPIRE_TIME", 0),
+			RefreshExpireTime: envInt("JWT_REFRESH_EXPIRE_TIME", 0),
 		},
 		ThaiBulkSMS: config.ThaiBulkSMS{
-			AddressRequest: viper.GetString("ADDRESS_REQUEST"),
-			AddressVerify:  viper.GetString("ADDRESS_VERIFY"),
-			APIKey:         viper.GetString("API_KEY"),
-			APISecret:      viper.GetString("API_SECRET"),
+			AddressRequest: os.Getenv("ADDRESS_REQUEST"),
+			AddressVerify:  os.Getenv("ADDRESS_VERIFY"),
+			APIKey:         os.Getenv("API_KEY"),
+			APISecret:      os.Getenv("API_SECRET"),
 		},
-		CorsAllowOrigins: viper.GetString("CORS_ALLOW_ORIGINS"),
+		CorsAllowOrigins: os.Getenv("CORS_ALLOW_ORIGINS"),
 	}
 
 	dsn := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable",
@@ -79,6 +74,18 @@ func init() {
 
 	sqldb := sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(dsn)))
 	conn = bun.NewDB(sqldb, pgdialect.New())
+}
+
+func envInt(name string, fallback int) int {
+	v := os.Getenv(name)
+	if v == "" {
+		return fallback
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		return fallback
+	}
+	return n
 }
 
 // databaseTargetLine returns a password-redacted DSN label for CLI output (migrate / rollback).
