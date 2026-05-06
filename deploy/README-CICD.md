@@ -15,6 +15,10 @@ This repo ships a production-oriented compose file: `deploy/docker-compose.prod.
 
 3. Copy `deploy/docker-compose.prod.yml` to e.g. `/opt/pramool/docker-compose.prod.yml`.
 
+   If you created `/opt/pramool` as **root**, either run once on the server  
+   `sudo chown -R ubuntu:ubuntu /opt/pramool`  
+   or rely on the workflow (it now runs `sudo mkdir` + `sudo chown` for the deploy user — requires passwordless `sudo` as on the default Ubuntu AMI).
+
    ```bash
    scp -i your-key.pem deploy/docker-compose.prod.yml ubuntu@YOUR_EC2:/opt/pramool/docker-compose.prod.yml
    ```
