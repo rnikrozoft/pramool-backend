@@ -114,17 +114,8 @@ environment:
   - DATABASE_NAME=${DATABASE_NAME}
 ```
 
-✅ .github/workflows/deployment.yml
+✅ `.github/workflows/deploy-ec2.yml`
 
-In the GitHub Actions CI/CD pipeline, environment variables are reconstructed into an .env file during the workflow using GitHub Secrets.
+CI builds and pushes images to your private registry, then SSHs into EC2 and runs `deploy/ec2-deploy-compose.sh` (health check + rollback). Server `.env` can be supplied via the `PRAMOOL_DOTENV_B64` secret or maintained on the host. See `deploy/README-CICD.md`.
 
-These values are then copied to the VPS for use in Docker Compose on the server.
-
-Example step:
-```yml
-- name: Write .env file
-  run: |
-    echo "DATABASE_HOST=${DATABASE_HOST}" >> .env
-    ...
-```
-By properly setting up your .env file, both local development and production deployment via CI/CD will work seamlessly.
+By properly setting up your `.env` file (local) and secrets (CI / server), both local development and production deployment work as intended.

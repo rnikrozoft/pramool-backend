@@ -2,7 +2,7 @@ name: Build, push, deploy (EC2)
 
 on:
   push:
-    branches: [main]
+    branches: [develop]
   workflow_dispatch:
 
 env:
