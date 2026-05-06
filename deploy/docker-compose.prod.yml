@@ -1,0 +1,143 @@
+# Production-style stack: pull pre-built images from your private registry.
+# Copy this folder to the server (e.g. /opt/pramool) together with a server-local .env
+# (never commit .env). GitHub Actions can optionally refresh .env from secrets — see README-CICD.md
+#
+# Usage on EC2:
+#   export REGISTRY_HOST=43.x.x.x:5000
+#   export IMAGE_TAG=latest   # or a git sha
+#   docker compose -f docker-compose.prod.yml pull
+#   docker compose -f docker-compose.prod.yml up -d
+
+services:
+  postgres:
+    container_name: pramool-postgres
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${DATABASE_USERNAME:-postgres}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-postgres}
+      POSTGRES_DB: ${DATABASE_NAME:-pramool}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DATABASE_USERNAME:-postgres} -d ${DATABASE_NAME:-pramool}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+    networks:
+      - pramool-net
+
+  jaeger:
+    container_name: pramool-jaeger
+    image: jaegertracing/all-in-one:1.58
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "16686:16686"
+      - "4317:4317"
+      - "4318:4318"
+    restart: unless-stopped
+    networks:
+      - pramool-net
+
+  pramool-core:
+    container_name: pramool-core
+    image: ${REGISTRY_HOST}/pramool-core:${IMAGE_TAG:-latest}
+    env_file:
+      - .env
+    environment:
+      DATABASE_HOST: postgres
+      DATABASE_PORT: ${DATABASE_PORT:-5432}
+      DATABASE_USERNAME: ${DATABASE_USERNAME}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+      DATABASE_NAME: ${DATABASE_NAME}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRE_TIME: ${JWT_EXPIRE_TIME:-1}
+      JWT_REFRESH_EXPIRE_TIME: ${JWT_REFRESH_EXPIRE_TIME:-168}
+      CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-http://localhost:3000}
+      ADDRESS_REQUEST: ${ADDRESS_REQUEST:-}
+      ADDRESS_VERIFY: ${ADDRESS_VERIFY:-}
+      API_KEY: ${API_KEY:-}
+      API_SECRET: ${API_SECRET:-}
+    ports:
+      - "${CORE_PORT:-3001}:3001"
+    volumes:
+      - uploads:/root/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - pramool-net
+
+  pramool-wallet-service:
+    container_name: pramool-wallet-service
+    image: ${REGISTRY_HOST}/pramool-wallet:${IMAGE_TAG:-latest}
+    env_file:
+      - .env
+    environment:
+      PORT: 3102
+      DATABASE_DSN: ${DATABASE_DSN}
+      JWT_SECRET: ${JWT_SECRET}
+      OMISE_SECRET_KEY: ${OMISE_SECRET_KEY}
+      OMISE_WEBHOOK_SECRET: ${OMISE_WEBHOOK_SECRET}
+      CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-http://localhost:3000}
+    ports:
+      - "${WALLET_PORT:-3102}:3102"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - pramool-net
+
+  pramool-auction-service:
+    container_name: pramool-auction-service
+    image: ${REGISTRY_HOST}/pramool-auction:${IMAGE_TAG:-latest}
+    env_file:
+      - .env
+    environment:
+      PORT: 3103
+      DATABASE_URL: ${AUCTION_DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      ESCROW_AUTO_CONFIRM_DAYS: ${ESCROW_AUTO_CONFIRM_DAYS:-14}
+      CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-http://localhost:3000}
+      PRAMOOL_UPLOAD_ROOT: /srv/pramool
+    ports:
+      - "${AUCTION_PORT:-3103}:3103"
+    volumes:
+      - uploads:/srv/pramool/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      pramool-wallet-service:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - pramool-net
+
+  pramool-frontend:
+    container_name: pramool-frontend
+    image: ${REGISTRY_HOST}/pramool-frontend:${IMAGE_TAG:-latest}
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    depends_on:
+      pramool-core:
+        condition: service_started
+      pramool-wallet-service:
+        condition: service_started
+      pramool-auction-service:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - pramool-net
+
+volumes:
+  pgdata:
+  uploads:
+
+networks:
+  pramool-net:
+    driver: bridge
