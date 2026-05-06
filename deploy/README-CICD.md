@@ -96,6 +96,8 @@ Here we use a small **bash script** (`deploy/ec2-deploy-compose.sh`) — the sam
 
 Workflows upload the script with **`appleboy/scp-action`** (widely used) and run it over **`appleboy/ssh-action`**.
 
+`scp-action` archives paths with directory structure; uploading `deploy/ec2-deploy-compose.sh` can extract to `.../deploy/ec2-deploy-compose.sh` on the server. Workflows **copy the script to the repo root** before SCP so it lands exactly as `/opt/pramool/deploy/ec2-deploy-compose.sh`.
+
 Per-repo health URLs are set in each workflow as `DEPLOY_HEALTH_URL`. If you change host ports in `.env`, update the workflow `env` block to match.
 
 ## Registry garbage-collect after deploy
