@@ -11,19 +11,26 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// rollbackCmd rolls back the last applied SQL migration group (runs paired *.down.sql).
+// rollbackCmd rolls back the last applied SQL migration group for the selected database.
 var rollbackCmd = &cobra.Command{
 	Use:   "rollback",
 	Short: "Roll back the last applied database migration group",
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Fprintf(cmd.OutOrStdout(), "rollback target: %s\n", databaseTargetLine())
+		ctx := context.Background()
+		db, label, err := openMigrateDB(migrateDB)
+		if err != nil {
+			panic(err)
+		}
+		defer db.Close()
+
+		fmt.Fprintf(cmd.OutOrStdout(), "rollback target: %s (db=%s)\n", label, migrateDB)
 		fmt.Fprintln(cmd.OutOrStdout(), "            (bun tracks applied files in table bun_migrations)")
-		group, err := migrations.Rollback(context.Background(), conn)
+		group, err := migrations.Rollback(ctx, db, migrateDB)
 		if err != nil {
 			panic(err)
 		}
 		if group == nil || group.IsZero() {
-			fmt.Fprintln(cmd.OutOrStdout(), "rollback: nothing to roll back (no applied migrations)")
+			fmt.Fprintf(cmd.OutOrStdout(), "rollback: nothing to roll back (no applied migrations)")
 			return
 		}
 		fmt.Fprintf(cmd.OutOrStdout(), "rollback OK: %s\n", group.String())
@@ -31,15 +38,6 @@ var rollbackCmd = &cobra.Command{
 }
 
 func init() {
+	rollbackCmd.Flags().StringVar(&migrateDB, "db", migrations.DBCore, "database: core, wallet, auction, or all")
 	rootCmd.AddCommand(rollbackCmd)
-
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// rollbackCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// rollbackCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }

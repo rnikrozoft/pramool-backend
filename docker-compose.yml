@@ -5,16 +5,54 @@ services:
     environment:
       POSTGRES_USER: ${DATABASE_USERNAME:-postgres}
       POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-postgres}
-      POSTGRES_DB: ${DATABASE_NAME:-pramool}
+      POSTGRES_DB: ${DATABASE_NAME:-pramool_core}
     ports:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DATABASE_USERNAME:-postgres} -d ${DATABASE_NAME:-pramool}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DATABASE_USERNAME:-postgres} -d ${DATABASE_NAME:-pramool_core}"]
       interval: 5s
       timeout: 5s
       retries: 12
+    restart: unless-stopped
+    networks:
+      - pramool-net
+
+  redis:
+    container_name: pramool-redis
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+    networks:
+      - pramool-net
+
+  # Web UI — http://localhost:5540
+  # Insight รันใน Docker: อย่าใช้ 127.0.0.1 ให้ใช้ host "redis" (ชื่อ service บน pramool-net)
+  redis-insight:
+    container_name: pramool-redis-insight
+    image: redis/redisinsight:latest
+    ports:
+      - "${REDIS_INSIGHT_PORT:-5540}:5540"
+    environment:
+      RI_ACCEPT_TERMS_AND_CONDITIONS: "true"
+      RI_REDIS_HOST: redis
+      RI_REDIS_PORT: "6379"
+      RI_REDIS_ALIAS: pramool-local
+    volumes:
+      - redisinsight:/data
+    depends_on:
+      redis:
+        condition: service_healthy
     restart: unless-stopped
     networks:
       - pramool-net
@@ -73,7 +111,11 @@ services:
       - .env
     environment:
       PORT: 3102
-      DATABASE_DSN: ${DATABASE_DSN}
+      DATABASE_HOST: ${DATABASE_HOST:-postgres}
+      DATABASE_PORT: ${DATABASE_PORT:-5432}
+      DATABASE_USERNAME: ${DATABASE_USERNAME}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+      DATABASE_NAME: ${DATABASE_NAME}
       JWT_SECRET: ${JWT_SECRET}
       OMISE_SECRET_KEY: ${OMISE_SECRET_KEY}
       OMISE_WEBHOOK_SECRET: ${OMISE_WEBHOOK_SECRET}
@@ -96,17 +138,24 @@ services:
       - .env
     environment:
       PORT: 3103
-      DATABASE_URL: ${AUCTION_DATABASE_URL}
+      DATABASE_HOST: ${DATABASE_HOST:-postgres}
+      DATABASE_PORT: ${DATABASE_PORT:-5432}
+      DATABASE_USERNAME: ${DATABASE_USERNAME}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+      DATABASE_NAME: ${DATABASE_NAME}
       JWT_SECRET: ${JWT_SECRET}
       ESCROW_AUTO_CONFIRM_DAYS: ${ESCROW_AUTO_CONFIRM_DAYS:-14}
       CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-http://localhost:3000}
       PRAMOOL_UPLOAD_ROOT: /srv/pramool
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
     ports:
       - "${AUCTION_PORT:-3103}:3103"
     volumes:
       - uploads:/srv/pramool/uploads
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
       pramool-wallet-service:
         condition: service_started
@@ -139,6 +188,8 @@ services:
 
 volumes:
   pgdata:
+  redisdata:
+  redisinsight:
   uploads:
 
 networks:

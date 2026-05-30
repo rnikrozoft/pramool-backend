@@ -23,6 +23,8 @@ type UserProfileResponse struct {
 	// WithdrawalBlocked is true while the user has pending seller ship or buyer confirm (escrow) on a closed auction.
 	WithdrawalBlocked     bool   `json:"withdrawal_blocked"`
 	WithdrawalBlockReason string `json:"withdrawal_block_reason,omitempty"`
+	// PendingSellerShipCount is closed auctions won by someone where seller has not recorded shipment yet.
+	PendingSellerShipCount int `json:"pending_seller_ship_count"`
 }
 
 // UpdateProfileRequest is the JSON body for PUT /users/profile.

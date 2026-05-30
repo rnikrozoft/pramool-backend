@@ -101,6 +101,10 @@ func (s user) FindUserIDByTelWithFallback(ctx context.Context, tel string) (stri
 	if !errors.Is(err, sql.ErrNoRows) {
 		return "", err
 	}
+	// Onboarding login uses tel as JWT subject only after OTP created tel_verify.
+	if _, err := s.userRepository.FindTelVerifyByTel(ctx, tel); err != nil {
+		return "", err
+	}
 	return tel, nil
 }
 

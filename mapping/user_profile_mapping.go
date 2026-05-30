@@ -23,7 +23,7 @@ func WithdrawalBlockedFromCounts(sellerN, buyerN int) (blocked bool, reason stri
 }
 
 // ToUserProfileResponse maps a user row to the profile API shape.
-func ToUserProfileResponse(u entity.User, withdrawalBlocked bool, withdrawalReason string) dto.UserProfileResponse {
+func ToUserProfileResponse(u entity.User, withdrawalBlocked bool, withdrawalReason string, pendingSellerShip int) dto.UserProfileResponse {
 	return dto.UserProfileResponse{
 		UserID:                u.UserID,
 		Tel:                   u.Tel,
@@ -43,8 +43,9 @@ func ToUserProfileResponse(u entity.User, withdrawalBlocked bool, withdrawalReas
 		BankAccountName:       u.BankAccountName,
 		BankAccountNumber:     u.BankAccountNumber,
 		Credit:                u.Credit,
-		WithdrawalBlocked:     withdrawalBlocked,
-		WithdrawalBlockReason: withdrawalReason,
+		WithdrawalBlocked:        withdrawalBlocked,
+		WithdrawalBlockReason:    withdrawalReason,
+		PendingSellerShipCount: pendingSellerShip,
 	}
 }
 

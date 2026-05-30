@@ -55,5 +55,5 @@ for spec in "${SERVICES[@]}"; do
   PIDS+=("$!")
 done
 
-echo "all services started (core :3001, backoffice-api :3021, wallet :3102, auction :3103). Ctrl+C to stop."
+echo "all services started (core :3001, wallet :3102, auction :3103). Ctrl+C to stop."
 wait

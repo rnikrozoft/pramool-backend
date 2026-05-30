@@ -4,48 +4,58 @@ Copyright © 2025 rnikrozoft rnikrozoft.dev@gmail.com
 package cmd
 
 import (
-	"context"
 	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
 
 	"github.com/rnikrozoft/pramool-core/migrations"
 	"github.com/spf13/cobra"
 )
 
-// newMigrationCmd represents the newMigration command
+// newMigrationCmd creates a new .up.sql / .down.sql pair under migrations/<db>/.
 var newMigrationCmd = &cobra.Command{
-	Use:   "newMigration",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
+	Use:   "newMigration <db> <name>",
+	Short: "Create a new SQL migration pair under migrations/<db>/",
+	Long: `db is one of: core, wallet, auction
 
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
-	PreRunE: func(_ *cobra.Command, args []string) error {
-		if len(args) != 1 {
-			return errors.New("newMigration command need one argument (file name)")
+Example:
+  go run . newMigration wallet my_table`,
+	Args: cobra.ExactArgs(2),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		db := strings.TrimSpace(strings.ToLower(args[0]))
+		name := strings.TrimSpace(args[1])
+		switch db {
+		case migrations.DBCore, migrations.DBWallet, migrations.DBAuction:
+		default:
+			return errors.New("db must be core, wallet, or auction")
 		}
+		if name == "" {
+			return errors.New("migration name is required")
+		}
+		stamp := time.Now().UTC().Format("20060102150405")
+		base := fmt.Sprintf("%s_%s", stamp, name)
+		dir := filepath.Join("migrations", db)
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return err
+		}
+		body := []byte("SET statement_timeout = 0;\n\n--bun:split\n\n")
+		upPath := filepath.Join(dir, base+".up.sql")
+		downPath := filepath.Join(dir, base+".down.sql")
+		if err := os.WriteFile(upPath, body, 0o644); err != nil {
+			return err
+		}
+		if err := os.WriteFile(downPath, body, 0o644); err != nil {
+			return err
+		}
+		fmt.Fprintf(cmd.OutOrStdout(), "created %s\n", upPath)
+		fmt.Fprintf(cmd.OutOrStdout(), "created %s\n", downPath)
 		return nil
-	},
-	Run: func(cmd *cobra.Command, args []string) {
-		migrator, err := migrations.GetMigrator(context.Background(), nil)
-		if err != nil {
-			panic(err)
-		}
-		migrator.CreateSQLMigrations(context.Background(), args[0])
 	},
 }
 
 func init() {
 	rootCmd.AddCommand(newMigrationCmd)
-
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// newMigrationCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// newMigrationCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }

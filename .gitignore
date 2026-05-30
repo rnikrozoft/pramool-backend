@@ -2,3 +2,4 @@
 .env
 migrate.sh
 uploads/
+.DS_Store

@@ -4,10 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
 	"strings"
 	"time"
 
+	"github.com/rnikrozoft/pramool-core/internal/money"
 	"github.com/rnikrozoft/pramool-core/model/entity"
 	"github.com/uptrace/bun"
 )
@@ -80,14 +80,17 @@ func (r user) GetMyInformation(ctx context.Context, userID string) (*entity.User
 }
 
 func (r user) AddCreditByUserID(ctx context.Context, userID string, amount int64) error {
+	if err := money.ValidatePositiveBaht(amount); err != nil {
+		return err
+	}
 	query := `UPDATE users SET credit = credit + ?, updated_at = NOW() WHERE user_id = ?`
 	_, err := r.bun.NewRaw(query, amount, userID).Exec(ctx)
 	return err
 }
 
 func (r user) DeductCreditIfEnoughTx(ctx context.Context, tx bun.Tx, userID string, amount int64) (int64, error) {
-	if amount <= 0 {
-		return 0, nil
+	if err := money.ValidatePositiveBaht(amount); err != nil {
+		return 0, err
 	}
 	res, err := tx.NewRaw(`
 		UPDATE users
@@ -101,8 +104,8 @@ func (r user) DeductCreditIfEnoughTx(ctx context.Context, tx bun.Tx, userID stri
 }
 
 func (r user) DeductListingDepositTx(ctx context.Context, tx bun.Tx, userID string, amount int64) (bool, int64, int64, error) {
-	if amount <= 0 {
-		return false, 0, 0, fmt.Errorf("invalid deduct amount")
+	if err := money.ValidatePositiveBaht(amount); err != nil {
+		return false, 0, 0, err
 	}
 	var after, before int64
 	err := tx.NewRaw(`
@@ -309,6 +312,7 @@ func (r user) UpdateProfile(ctx context.Context, p entity.ProfileUpdate) error {
 			bank_id = ?,
 			bank_account_name = ?,
 			bank_account_number = ?,
+			omise_recipient_id = NULL,
 			updated_at = NOW()
 		WHERE user_id = ?
 	`, p.Tel, p.FirstName, p.LastName, p.AddressPrimary, p.Address, p.Soi, p.Road,

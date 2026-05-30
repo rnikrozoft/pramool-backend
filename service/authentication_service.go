@@ -156,6 +156,9 @@ func (service authentication) LoginByTel(ctx context.Context, tel, password stri
 	}
 	sub, err := service.userService.FindUserIDByTelWithFallback(ctx, tel)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return empty, errInvalidCredentials()
+		}
 		return empty, err
 	}
 	access, err := service.GenerateAccessToken(sub)
