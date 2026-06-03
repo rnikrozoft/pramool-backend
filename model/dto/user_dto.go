@@ -1,7 +1,9 @@
 package dto
 
 type UserRegisterRequest struct {
-	UserID            string `json:"user_id" validate:"required,max=13"`
+	ConsentPayload
+	NationalID        string `json:"national_id" validate:"omitempty,max=13"`
+	UserID            string `json:"user_id" validate:"omitempty,max=13"` // legacy alias for national_id
 	Tel               string `json:"tel" validate:"required,max=10"`
 	Email             string `json:"email"`
 	Facebook          string `json:"facebook"`

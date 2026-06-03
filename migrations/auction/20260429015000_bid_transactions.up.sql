@@ -4,7 +4,7 @@ SET statement_timeout = 0;
 
 CREATE TABLE bid_transactions (
     bid_tx_id BIGSERIAL PRIMARY KEY,
-    user_id VARCHAR(13) NOT NULL,
+    user_id UUID NOT NULL,
     auction_id VARCHAR(40) NOT NULL REFERENCES auctions(auction_id) ON DELETE CASCADE,
     tx_type VARCHAR(30) NOT NULL,
     amount BIGINT NOT NULL,

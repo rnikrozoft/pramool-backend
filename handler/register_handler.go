@@ -17,6 +17,7 @@ type RegisterHandler struct {
 	authenticationService  service.AuthenticationService
 	registerService        service.RegisterService
 	userService            service.UserService
+	privacyService         service.PrivacyService
 	accessCookieMaxAgeSec  int
 	refreshCookieMaxAgeSec int
 }
@@ -26,6 +27,7 @@ func NewRegisterHandler(
 	authenticationService service.AuthenticationService,
 	registerService service.RegisterService,
 	userService service.UserService,
+	privacyService service.PrivacyService,
 	accessCookieMaxAgeSec int,
 	refreshCookieMaxAgeSec int,
 ) RegisterHandler {
@@ -40,6 +42,7 @@ func NewRegisterHandler(
 		authenticationService:  authenticationService,
 		registerService:        registerService,
 		userService:            userService,
+		privacyService:         privacyService,
 		accessCookieMaxAgeSec:  accessCookieMaxAgeSec,
 		refreshCookieMaxAgeSec: refreshCookieMaxAgeSec,
 	}
@@ -82,11 +85,19 @@ func (h RegisterHandler) Signup(c *fiber.Ctx) error {
 		}
 		return responseCommonError(c, err)
 	}
-	tokens, err := h.authenticationService.LoginByTel(ctx, req.Tel, req.Password)
+	ip, ua := RequestMetaFromFiber(c)
+	if err := h.privacyService.RecordConsents(ctx, "", req.Tel, ip, ua, req.ConsentPayload); err != nil {
+		if errors.Is(err, service.ErrInvalidPolicyVersion) {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"message": "เวอร์ชันนโยบายความเป็นส่วนตัวไม่ตรงกับปัจจุบัน กรุณารีเฟรชหน้าแล้วลองใหม่"})
+		}
+		return responseCommonError(c, err)
+	}
+	tokens, err := h.authenticationService.LoginByTel(ctx, req.Tel, req.Password, false)
 	if err != nil {
 		return responseCommonError(c, err)
 	}
-	ApplyAuthCookies(c, tokens.Access, tokens.Refresh, h.accessCookieMaxAgeSec, h.refreshCookieMaxAgeSec)
+	accessSec, refreshSec := SessionCookieMaxAges(false, h.accessCookieMaxAgeSec, h.refreshCookieMaxAgeSec)
+	ApplyAuthCookies(c, tokens.Access, tokens.Refresh, accessSec, refreshSec)
 	return c.SendStatus(fiber.StatusCreated)
 }
 
@@ -108,9 +119,18 @@ func (h RegisterHandler) Register(c *fiber.Ctx) error {
 	if err := validate(c, h.validate, user); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(err)
 	}
-	user.UserID = strings.TrimSpace(user.UserID)
+	user.NationalID = strings.TrimSpace(user.NationalID)
+	if user.NationalID == "" {
+		user.NationalID = strings.TrimSpace(user.UserID)
+	}
 	user.Tel = strings.TrimSpace(user.Tel)
 	user.Email = strings.TrimSpace(user.Email)
+	if user.NationalID == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"message": "กรุณากรอกเลขบัตรประชาชน"})
+	}
+	if err := ValidateNationalID(user.NationalID); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"message": err.Error()})
+	}
 
 	userEntity := mapping.ToUserEntity(*user)
 	if err := h.registerService.RegisterUser(ctx, userEntity); err != nil {
@@ -121,15 +141,27 @@ func (h RegisterHandler) Register(c *fiber.Ctx) error {
 		}
 		return responseCommonError(c, err)
 	}
+	internalUserID, err := h.userService.FindUserIDByTelWithFallback(ctx, user.Tel)
+	if err != nil {
+		return responseCommonError(c, err)
+	}
+	ip, ua := RequestMetaFromFiber(c)
+	if err := h.privacyService.RecordConsents(ctx, internalUserID, user.Tel, ip, ua, user.ConsentPayload); err != nil {
+		if errors.Is(err, service.ErrInvalidPolicyVersion) {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"message": "เวอร์ชันนโยบายความเป็นส่วนตัวไม่ตรงกับปัจจุบัน กรุณารีเฟรชหน้าแล้วลองใหม่"})
+		}
+		return responseCommonError(c, err)
+	}
 
-	access, err := h.authenticationService.GenerateAccessToken(user.UserID)
+	access, err := h.authenticationService.GenerateAccessToken(internalUserID)
 	if err != nil {
 		return responseCommonError(c, err)
 	}
-	refresh, err := h.authenticationService.GenerateRefreshToken(user.UserID)
+	refresh, err := h.authenticationService.GenerateRefreshTokenWithRemember(internalUserID, false)
 	if err != nil {
 		return responseCommonError(c, err)
 	}
-	ApplyAuthCookies(c, access, refresh, h.accessCookieMaxAgeSec, h.refreshCookieMaxAgeSec)
+	accessSec, refreshSec := SessionCookieMaxAges(false, h.accessCookieMaxAgeSec, h.refreshCookieMaxAgeSec)
+	ApplyAuthCookies(c, access, refresh, accessSec, refreshSec)
 	return c.SendStatus(fiber.StatusCreated)
 }

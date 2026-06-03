@@ -57,134 +57,134 @@ services:
     networks:
       - pramool-net
 
-  jaeger:
-    container_name: pramool-jaeger
-    image: jaegertracing/all-in-one:1.58
-    environment:
-      COLLECTOR_OTLP_ENABLED: "true"
-    ports:
-      - "16686:16686"
-      - "4317:4317"
-      - "4318:4318"
-    restart: unless-stopped
-    networks:
-      - pramool-net
+  # jaeger:
+  #   container_name: pramool-jaeger
+  #   image: jaegertracing/all-in-one:1.58
+  #   environment:
+  #     COLLECTOR_OTLP_ENABLED: "true"
+  #   ports:
+  #     - "16686:16686"
+  #     - "4317:4317"
+  #     - "4318:4318"
+  #   restart: unless-stopped
+  #   networks:
+  #     - pramool-net
 
-  pramool-core:
-    container_name: pramool-core
-    build:
-      context: .
-      dockerfile: Dockerfile
-    env_file:
-      - .env
-    environment:
-      DATABASE_HOST: ${DATABASE_HOST:-postgres}
-      DATABASE_PORT: ${DATABASE_PORT:-5432}
-      DATABASE_USERNAME: ${DATABASE_USERNAME}
-      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
-      DATABASE_NAME: ${DATABASE_NAME}
-      JWT_SECRET: ${JWT_SECRET}
-      JWT_EXPIRE_TIME: ${JWT_EXPIRE_TIME:-1}
-      JWT_REFRESH_EXPIRE_TIME: ${JWT_REFRESH_EXPIRE_TIME:-168}
-      CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-http://localhost:3000}
-      ADDRESS_REQUEST: ${ADDRESS_REQUEST:-}
-      ADDRESS_VERIFY: ${ADDRESS_VERIFY:-}
-      API_KEY: ${API_KEY:-}
-      API_SECRET: ${API_SECRET:-}
-    ports:
-      - "${CORE_PORT:-3001}:3001"
-    volumes:
-      - uploads:/root/uploads
-    depends_on:
-      postgres:
-        condition: service_healthy
-    restart: unless-stopped
-    networks:
-      - pramool-net
+  # pramool-core:
+  #   container_name: pramool-core
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #   env_file:
+  #     - .env
+  #   environment:
+  #     DATABASE_HOST: ${DATABASE_HOST:-postgres}
+  #     DATABASE_PORT: ${DATABASE_PORT:-5432}
+  #     DATABASE_USERNAME: ${DATABASE_USERNAME}
+  #     DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+  #     DATABASE_NAME: ${DATABASE_NAME}
+  #     JWT_SECRET: ${JWT_SECRET}
+  #     JWT_EXPIRE_TIME: ${JWT_EXPIRE_TIME:-1}
+  #     JWT_REFRESH_EXPIRE_TIME: ${JWT_REFRESH_EXPIRE_TIME:-168}
+  #     CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-http://localhost:3000}
+  #     ADDRESS_REQUEST: ${ADDRESS_REQUEST:-}
+  #     ADDRESS_VERIFY: ${ADDRESS_VERIFY:-}
+  #     API_KEY: ${API_KEY:-}
+  #     API_SECRET: ${API_SECRET:-}
+  #   ports:
+  #     - "${CORE_PORT:-3001}:3001"
+  #   volumes:
+  #     - uploads:/root/uploads
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #   restart: unless-stopped
+  #   networks:
+  #     - pramool-net
 
-  pramool-wallet-service:
-    container_name: pramool-wallet-service
-    build:
-      context: ../pramool-wallet-service
-      dockerfile: Dockerfile
-    env_file:
-      - .env
-    environment:
-      PORT: 3102
-      DATABASE_HOST: ${DATABASE_HOST:-postgres}
-      DATABASE_PORT: ${DATABASE_PORT:-5432}
-      DATABASE_USERNAME: ${DATABASE_USERNAME}
-      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
-      DATABASE_NAME: ${DATABASE_NAME}
-      JWT_SECRET: ${JWT_SECRET}
-      OMISE_SECRET_KEY: ${OMISE_SECRET_KEY}
-      OMISE_WEBHOOK_SECRET: ${OMISE_WEBHOOK_SECRET}
-      CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-http://localhost:3000}
-    ports:
-      - "${WALLET_PORT:-3102}:3102"
-    depends_on:
-      postgres:
-        condition: service_healthy
-    restart: unless-stopped
-    networks:
-      - pramool-net
+  # pramool-wallet-service:
+  #   container_name: pramool-wallet-service
+  #   build:
+  #     context: ../pramool-wallet-service
+  #     dockerfile: Dockerfile
+  #   env_file:
+  #     - .env
+  #   environment:
+  #     PORT: 3102
+  #     DATABASE_HOST: ${DATABASE_HOST:-postgres}
+  #     DATABASE_PORT: ${DATABASE_PORT:-5432}
+  #     DATABASE_USERNAME: ${DATABASE_USERNAME}
+  #     DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+  #     DATABASE_NAME: ${DATABASE_NAME}
+  #     JWT_SECRET: ${JWT_SECRET}
+  #     OMISE_SECRET_KEY: ${OMISE_SECRET_KEY}
+  #     OMISE_WEBHOOK_SECRET: ${OMISE_WEBHOOK_SECRET}
+  #     CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-http://localhost:3000}
+  #   ports:
+  #     - "${WALLET_PORT:-3102}:3102"
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #   restart: unless-stopped
+  #   networks:
+  #     - pramool-net
 
-  pramool-auction-service:
-    container_name: pramool-auction-service
-    build:
-      context: ../pramool-auction-service
-      dockerfile: Dockerfile
-    env_file:
-      - .env
-    environment:
-      PORT: 3103
-      DATABASE_HOST: ${DATABASE_HOST:-postgres}
-      DATABASE_PORT: ${DATABASE_PORT:-5432}
-      DATABASE_USERNAME: ${DATABASE_USERNAME}
-      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
-      DATABASE_NAME: ${DATABASE_NAME}
-      JWT_SECRET: ${JWT_SECRET}
-      ESCROW_AUTO_CONFIRM_DAYS: ${ESCROW_AUTO_CONFIRM_DAYS:-14}
-      CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-http://localhost:3000}
-      PRAMOOL_UPLOAD_ROOT: /srv/pramool
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
-    ports:
-      - "${AUCTION_PORT:-3103}:3103"
-    volumes:
-      - uploads:/srv/pramool/uploads
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      pramool-wallet-service:
-        condition: service_started
-    restart: unless-stopped
-    networks:
-      - pramool-net
+  # pramool-auction-service:
+  #   container_name: pramool-auction-service
+  #   build:
+  #     context: ../pramool-auction-service
+  #     dockerfile: Dockerfile
+  #   env_file:
+  #     - .env
+  #   environment:
+  #     PORT: 3103
+  #     DATABASE_HOST: ${DATABASE_HOST:-postgres}
+  #     DATABASE_PORT: ${DATABASE_PORT:-5432}
+  #     DATABASE_USERNAME: ${DATABASE_USERNAME}
+  #     DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+  #     DATABASE_NAME: ${DATABASE_NAME}
+  #     JWT_SECRET: ${JWT_SECRET}
+  #     ESCROW_AUTO_CONFIRM_DAYS: ${ESCROW_AUTO_CONFIRM_DAYS:-14}
+  #     CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-http://localhost:3000}
+  #     PRAMOOL_UPLOAD_ROOT: /srv/pramool
+  #     REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+  #   ports:
+  #     - "${AUCTION_PORT:-3103}:3103"
+  #   volumes:
+  #     - uploads:/srv/pramool/uploads
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #     pramool-wallet-service:
+  #       condition: service_started
+  #   restart: unless-stopped
+  #   networks:
+  #     - pramool-net
 
-  pramool-frontend:
-    container_name: pramool-frontend
-    build:
-      context: ../pramool.in.th
-      dockerfile: Dockerfile.vps
-      args:
-        NEXT_PUBLIC_CORE_API_BASE_URL: ${NEXT_PUBLIC_CORE_API_BASE_URL:-http://localhost:3001}
-        NEXT_PUBLIC_USER_API_BASE_URL: ${NEXT_PUBLIC_USER_API_BASE_URL:-http://localhost:3001}
-        NEXT_PUBLIC_WALLET_API_BASE_URL: ${NEXT_PUBLIC_WALLET_API_BASE_URL:-http://localhost:3102}
-        NEXT_PUBLIC_AUCTION_REALTIME_BASE_URL: ${NEXT_PUBLIC_AUCTION_REALTIME_BASE_URL:-http://localhost:3103}
-    ports:
-      - "${FRONTEND_PORT:-3000}:3000"
-    depends_on:
-      pramool-core:
-        condition: service_started
-      pramool-wallet-service:
-        condition: service_started
-      pramool-auction-service:
-        condition: service_started
-    restart: unless-stopped
-    networks:
-      - pramool-net
+  # pramool-frontend:
+  #   container_name: pramool-frontend
+  #   build:
+  #     context: ../pramool.in.th
+  #     dockerfile: Dockerfile.vps
+  #     args:
+  #       NEXT_PUBLIC_CORE_API_BASE_URL: ${NEXT_PUBLIC_CORE_API_BASE_URL:-http://localhost:3001}
+  #       NEXT_PUBLIC_USER_API_BASE_URL: ${NEXT_PUBLIC_USER_API_BASE_URL:-http://localhost:3001}
+  #       NEXT_PUBLIC_WALLET_API_BASE_URL: ${NEXT_PUBLIC_WALLET_API_BASE_URL:-http://localhost:3102}
+  #       NEXT_PUBLIC_AUCTION_REALTIME_BASE_URL: ${NEXT_PUBLIC_AUCTION_REALTIME_BASE_URL:-http://localhost:3103}
+  #   ports:
+  #     - "${FRONTEND_PORT:-3000}:3000"
+  #   depends_on:
+  #     pramool-core:
+  #       condition: service_started
+  #     pramool-wallet-service:
+  #       condition: service_started
+  #     pramool-auction-service:
+  #       condition: service_started
+  #   restart: unless-stopped
+  #   networks:
+  #     - pramool-net
 
 volumes:
   pgdata:

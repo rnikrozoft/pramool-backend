@@ -1,13 +1,19 @@
 package mapping
 
 import (
+	"strings"
+
 	"github.com/rnikrozoft/pramool-core/model/dto"
 	"github.com/rnikrozoft/pramool-core/model/entity"
 )
 
 func ToUserEntity(req dto.UserRegisterRequest) entity.User {
+	nationalID := strings.TrimSpace(req.NationalID)
+	if nationalID == "" {
+		nationalID = strings.TrimSpace(req.UserID)
+	}
 	return entity.User{
-		UserID:            req.UserID,
+		NationalID:        nationalID,
 		Tel:               req.Tel,
 		Email:             req.Email,
 		Facebook:          req.Facebook,
@@ -30,7 +36,7 @@ func ToUserEntity(req dto.UserRegisterRequest) entity.User {
 
 func ToUserDTO(entity entity.User) dto.UserRegisterRequest {
 	return dto.UserRegisterRequest{
-		UserID:            entity.UserID,
+		NationalID:        entity.NationalID,
 		Tel:               entity.Tel,
 		Email:             entity.Email,
 		Facebook:          entity.Facebook,

@@ -46,12 +46,13 @@ func (h AuthenticationHandler) LoginByTel(c *fiber.Ctx) error {
 	if ident == "" {
 		ident = strings.TrimSpace(req.Tel)
 	}
-	tokens, err := h.authenticationService.Login(c.Context(), ident, req.Password)
+	tokens, err := h.authenticationService.Login(c.Context(), ident, req.Password, req.Remember)
 	if err != nil {
 		return responseCommonError(c, err)
 	}
 
-	ApplyAuthCookies(c, tokens.Access, tokens.Refresh, h.accessCookieMaxAgeSec, h.refreshCookieMaxAgeSec)
+	accessSec, refreshSec := SessionCookieMaxAges(req.Remember, h.accessCookieMaxAgeSec, h.refreshCookieMaxAgeSec)
+	ApplyAuthCookies(c, tokens.Access, tokens.Refresh, accessSec, refreshSec)
 	return c.SendStatus(fiber.StatusOK)
 }
 
@@ -61,7 +62,7 @@ func (h AuthenticationHandler) Refresh(c *fiber.Ctx) error {
 	if raw == "" {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"message": "missing refresh token"})
 	}
-	userID, err := h.authenticationService.ValidateRefreshToken(raw)
+	userID, remember, err := h.authenticationService.ParseRefreshToken(raw)
 	if err != nil {
 		ClearAuthCookies(c)
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"message": "invalid refresh token"})
@@ -70,11 +71,12 @@ func (h AuthenticationHandler) Refresh(c *fiber.Ctx) error {
 	if err != nil {
 		return responseCommonError(c, err)
 	}
-	refresh, err := h.authenticationService.GenerateRefreshToken(userID)
+	refresh, err := h.authenticationService.GenerateRefreshTokenWithRemember(userID, remember)
 	if err != nil {
 		return responseCommonError(c, err)
 	}
-	ApplyAuthCookies(c, access, refresh, h.accessCookieMaxAgeSec, h.refreshCookieMaxAgeSec)
+	accessSec, refreshSec := SessionCookieMaxAges(remember, h.accessCookieMaxAgeSec, h.refreshCookieMaxAgeSec)
+	ApplyAuthCookies(c, access, refresh, accessSec, refreshSec)
 	return c.SendStatus(fiber.StatusOK)
 }
 

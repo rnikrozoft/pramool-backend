@@ -7,46 +7,63 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rnikrozoft/pramool-core/model/dto"
 	"github.com/rnikrozoft/pramool-core/model/entity"
 	"github.com/rnikrozoft/pramool-core/repository"
 )
 
 type UserService interface {
 	IsTelAlreadyUsed(ctx context.Context, tel string) (bool, error)
-	ExistsRegisteredUserID(ctx context.Context, userID string) (bool, error)
+	ExistsRegisteredNationalID(ctx context.Context, nationalID string) (bool, error)
 	IsEmailTakenByOtherTel(ctx context.Context, email, requestTel string) (bool, error)
 	GetMyInfo(ctx context.Context, userID string) (*entity.User, error)
-	CountUserFulfillmentBlocks(ctx context.Context, userID string) (pendingSellerShip int, pendingBuyerConfirm int, err error)
+	CountUserFulfillmentBlocks(ctx context.Context, userID string) (pendingSellerShip int, err error)
 	FindUserIDByTelWithFallback(ctx context.Context, tel string) (string, error)
 	IsFirstRegistration(ctx context.Context, subject string) (bool, error)
+	GetOnboardingStatus(ctx context.Context, subject string) (dto.OnboardingStatusResponse, error)
 	UpdateMyProfile(ctx context.Context, p entity.ProfileUpdate) error
 	SaveUser(ctx context.Context, u *entity.User) error
 	GetActiveOTPBanUntil(ctx context.Context, tel string) (*time.Time, error)
 	RecordOTPTimeout(ctx context.Context, tel string) (*time.Time, int, error)
 	GetLoginPasswordHash(ctx context.Context, tel string) (string, error)
+	UpdatePasswordHashByTel(ctx context.Context, tel, passwordHash string) error
 	ResolveLoginIdentifier(ctx context.Context, raw string) (tel string, err error)
+	IsUserSuspended(ctx context.Context, subject string) (bool, error)
+	SubmitRestrictionAppeal(ctx context.Context, userID, reason string) (int64, error)
+	GetRestrictionAppeal(ctx context.Context, userID string) (*repository.RestrictionAppealRow, error)
+	HasPendingRestrictionAppeal(ctx context.Context, userID string) (bool, error)
+	ProfileAppealMeta(ctx context.Context, userID string) (pending bool, lastStatus string, err error)
+	CountUnreadNotifications(ctx context.Context, userID string) (int, error)
+	ListNotifications(ctx context.Context, userID string, limit, offset int) ([]repository.UserNotificationRow, int64, error)
+	MarkNotificationRead(ctx context.Context, userID string, notificationID int64) (*repository.UserNotificationRow, error)
 }
 
 type user struct {
-	userRepository repository.UserRepository
+	userRepository         repository.UserRepository
+	notificationRepository repository.UserNotificationRepository
 }
 
-func NewUserService(userRepository repository.UserRepository) UserService {
+func NewUserService(userRepository repository.UserRepository, notificationRepository repository.UserNotificationRepository) UserService {
 	return user{
-		userRepository: userRepository,
+		userRepository:         userRepository,
+		notificationRepository: notificationRepository,
 	}
 }
 
-func (s user) CountUserFulfillmentBlocks(ctx context.Context, userID string) (int, int, error) {
-	return s.userRepository.CountUserFulfillmentBlocks(ctx, strings.TrimSpace(userID))
+func (s user) CountUserFulfillmentBlocks(ctx context.Context, userID string) (int, error) {
+	userID = strings.TrimSpace(userID)
+	if !repository.SubjectIsUserUUID(userID) {
+		return 0, nil
+	}
+	return s.userRepository.CountUserFulfillmentBlocks(ctx, userID)
 }
 
 func (s user) IsTelAlreadyUsed(ctx context.Context, tel string) (bool, error) {
 	return s.userRepository.IsTelAlreadyUsed(ctx, tel)
 }
 
-func (s user) ExistsRegisteredUserID(ctx context.Context, userID string) (bool, error) {
-	return s.userRepository.ExistsRegisteredUserID(ctx, userID)
+func (s user) ExistsRegisteredNationalID(ctx context.Context, nationalID string) (bool, error) {
+	return s.userRepository.ExistsRegisteredNationalID(ctx, nationalID)
 }
 
 func (s user) IsEmailTakenByOtherTel(ctx context.Context, email, requestTel string) (bool, error) {
@@ -54,12 +71,15 @@ func (s user) IsEmailTakenByOtherTel(ctx context.Context, email, requestTel stri
 }
 
 func (s user) loadUserOrTelVerify(ctx context.Context, userID string) (*entity.User, error) {
-	u, err := s.userRepository.FindByID(ctx, userID)
-	if err == nil {
-		return u, nil
-	}
-	if !errors.Is(err, sql.ErrNoRows) {
-		return nil, err
+	userID = strings.TrimSpace(userID)
+	if repository.SubjectIsUserUUID(userID) {
+		u, err := s.userRepository.FindByID(ctx, userID)
+		if err == nil {
+			return u, nil
+		}
+		if !errors.Is(err, sql.ErrNoRows) {
+			return nil, err
+		}
 	}
 	tv, err := s.userRepository.FindTelVerifyByTel(ctx, userID)
 	if err != nil {
@@ -114,6 +134,34 @@ func (s user) IsFirstRegistration(ctx context.Context, subject string) (bool, er
 		return false, err
 	}
 	return !hasUserRecord, nil
+}
+
+func (s user) GetOnboardingStatus(ctx context.Context, subject string) (dto.OnboardingStatusResponse, error) {
+	subject = strings.TrimSpace(subject)
+	isFirst, err := s.IsFirstRegistration(ctx, subject)
+	if err != nil {
+		return dto.OnboardingStatusResponse{}, err
+	}
+	resp := dto.OnboardingStatusResponse{IsFirstRegistration: isFirst}
+	if !isFirst || repository.SubjectIsUserUUID(subject) {
+		return resp, nil
+	}
+	tv, err := s.userRepository.FindTelVerifyByTel(ctx, subject)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			resp.Tel = subject
+			return resp, nil
+		}
+		return dto.OnboardingStatusResponse{}, err
+	}
+	resp.Tel = strings.TrimSpace(tv.Tel)
+	if resp.Tel == "" {
+		resp.Tel = subject
+	}
+	resp.FirstName = strings.TrimSpace(tv.SignupFirstName)
+	resp.LastName = strings.TrimSpace(tv.SignupLastName)
+	resp.Email = strings.TrimSpace(tv.SignupEmail)
+	return resp, nil
 }
 
 func (s user) UpdateMyProfile(ctx context.Context, p entity.ProfileUpdate) error {
@@ -193,6 +241,10 @@ func (s user) GetLoginPasswordHash(ctx context.Context, tel string) (string, err
 	return s.userRepository.GetLoginPasswordHash(ctx, strings.TrimSpace(tel))
 }
 
+func (s user) UpdatePasswordHashByTel(ctx context.Context, tel, passwordHash string) error {
+	return s.userRepository.UpdatePasswordHashByTel(ctx, strings.TrimSpace(tel), strings.TrimSpace(passwordHash))
+}
+
 func normalizeThaiLocalTel(s string) string {
 	var b strings.Builder
 	for _, r := range s {
@@ -229,4 +281,101 @@ func (s user) ResolveLoginIdentifier(ctx context.Context, raw string) (string, e
 		tel = tel[len(tel)-10:]
 	}
 	return tel, nil
+}
+
+func (s user) IsUserSuspended(ctx context.Context, subject string) (bool, error) {
+	return s.userRepository.IsUserSuspended(ctx, subject)
+}
+
+func (s user) SubmitRestrictionAppeal(ctx context.Context, userID, reason string) (int64, error) {
+	reason = strings.TrimSpace(reason)
+	if len([]rune(reason)) < 10 {
+		return 0, errors.New("reason must be at least 10 characters")
+	}
+	if len([]rune(reason)) > 2000 {
+		return 0, errors.New("reason too long")
+	}
+	u, err := s.GetMyInfo(ctx, userID)
+	if err != nil {
+		return 0, err
+	}
+	return s.userRepository.InsertRestrictionAppeal(ctx, u.UserID, reason)
+}
+
+func (s user) GetRestrictionAppeal(ctx context.Context, userID string) (*repository.RestrictionAppealRow, error) {
+	u, err := s.GetMyInfo(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	return s.userRepository.GetRestrictionAppealForUser(ctx, u.UserID)
+}
+
+func (s user) HasPendingRestrictionAppeal(ctx context.Context, userID string) (bool, error) {
+	userID = strings.TrimSpace(userID)
+	if !repository.SubjectIsUserUUID(userID) {
+		return false, nil
+	}
+	u, err := s.GetMyInfo(ctx, userID)
+	if err != nil {
+		return false, err
+	}
+	return s.userRepository.HasPendingRestrictionAppeal(ctx, u.UserID)
+}
+
+func (s user) ProfileAppealMeta(ctx context.Context, userID string) (bool, string, error) {
+	userID = strings.TrimSpace(userID)
+	if !repository.SubjectIsUserUUID(userID) {
+		return false, "", nil
+	}
+	u, err := s.GetMyInfo(ctx, userID)
+	if err != nil {
+		return false, "", err
+	}
+	pending, err := s.userRepository.HasPendingRestrictionAppeal(ctx, u.UserID)
+	if err != nil {
+		return false, "", err
+	}
+	if pending {
+		return true, "", nil
+	}
+	row, err := s.userRepository.GetRestrictionAppealForUser(ctx, u.UserID)
+	if err != nil {
+		return false, "", err
+	}
+	if row == nil || row.Status == "pending" {
+		return false, "", nil
+	}
+	return false, row.Status, nil
+}
+
+func (s user) CountUnreadNotifications(ctx context.Context, userID string) (int, error) {
+	userID = strings.TrimSpace(userID)
+	if !repository.SubjectIsUserUUID(userID) {
+		return 0, nil
+	}
+	u, err := s.GetMyInfo(ctx, userID)
+	if err != nil {
+		return 0, err
+	}
+	return s.notificationRepository.CountUnread(ctx, u.UserID)
+}
+
+func (s user) ListNotifications(ctx context.Context, userID string, limit, offset int) ([]repository.UserNotificationRow, int64, error) {
+	u, err := s.GetMyInfo(ctx, userID)
+	if err != nil {
+		return nil, 0, err
+	}
+	return s.notificationRepository.List(ctx, u.UserID, limit, offset)
+}
+
+func (s user) MarkNotificationRead(ctx context.Context, userID string, notificationID int64) (*repository.UserNotificationRow, error) {
+	u, err := s.GetMyInfo(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	row, err := s.notificationRepository.MarkRead(ctx, u.UserID, notificationID)
+	if err != nil {
+		return nil, err
+	}
+	return row, nil
 }

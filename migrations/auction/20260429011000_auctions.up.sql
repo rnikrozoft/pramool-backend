@@ -4,7 +4,7 @@ SET statement_timeout = 0;
 
 CREATE TABLE auctions (
     auction_id VARCHAR(40) PRIMARY KEY,
-    seller_id VARCHAR(13) NOT NULL,
+    seller_id UUID NOT NULL,
     title VARCHAR(255) NOT NULL,
     category TEXT NOT NULL,
     item_condition VARCHAR(100) NOT NULL,
@@ -19,7 +19,7 @@ CREATE TABLE auctions (
     early_close_hold_amount BIGINT NOT NULL DEFAULT 0,
     buy_now_price BIGINT NOT NULL DEFAULT 0,
     cover_image_url TEXT NOT NULL,
-    winner_id VARCHAR(13),
+    winner_id UUID,
     settled_at TIMESTAMPTZ,
     seller_shipped_at TIMESTAMPTZ,
     buyer_received_at TIMESTAMPTZ,

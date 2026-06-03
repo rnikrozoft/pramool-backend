@@ -5,6 +5,7 @@ import (
 	"embed"
 	"fmt"
 	"io/fs"
+	"sort"
 	"strings"
 
 	"github.com/uptrace/bun"
@@ -15,6 +16,7 @@ const (
 	DBCore    = "core"
 	DBWallet  = "wallet"
 	DBAuction = "auction"
+	DBAdmin   = "admin"
 	DBAll     = "all"
 )
 
@@ -27,12 +29,36 @@ var walletSQL embed.FS
 //go:embed auction/*.sql
 var auctionSQL embed.FS
 
+//go:embed admin/*.sql
+var adminSQL embed.FS
+
+var allMigrationFS = []fs.FS{coreSQL, walletSQL, auctionSQL, adminSQL}
+
 func discoverOn(fsys fs.FS) (*migrate.Migrations, error) {
 	m := migrate.NewMigrations()
 	if err := m.Discover(fsys); err != nil {
 		return nil, err
 	}
 	return m, nil
+}
+
+func combineSorted(fsys []fs.FS) (*migrate.Migrations, error) {
+	var all migrate.MigrationSlice
+	for _, partFS := range fsys {
+		part, err := discoverOn(partFS)
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, part.Sorted()...)
+	}
+	sort.Slice(all, func(i, j int) bool {
+		return all[i].Name < all[j].Name
+	})
+	combined := migrate.NewMigrations()
+	for _, mig := range all {
+		combined.Add(mig)
+	}
+	return combined, nil
 }
 
 func migrationsFor(target string) (*migrate.Migrations, error) {
@@ -48,20 +74,12 @@ func migrationsFor(target string) (*migrate.Migrations, error) {
 		return discoverOn(walletSQL)
 	case DBAuction:
 		return discoverOn(auctionSQL)
+	case DBAdmin:
+		return discoverOn(adminSQL)
 	case DBAll:
-		combined := migrate.NewMigrations()
-		for _, fsys := range []fs.FS{coreSQL, walletSQL, auctionSQL} {
-			part, err := discoverOn(fsys)
-			if err != nil {
-				return nil, err
-			}
-			for _, mig := range part.Sorted() {
-				combined.Add(mig)
-			}
-		}
-		return combined, nil
+		return combineSorted(allMigrationFS)
 	default:
-		return nil, fmt.Errorf("unknown migration db %q (use core, wallet, auction, or all)", target)
+		return nil, fmt.Errorf("unknown migration db %q (use core, wallet, auction, admin, or all)", target)
 	}
 }
 

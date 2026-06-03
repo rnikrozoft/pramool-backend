@@ -5,8 +5,8 @@ SET statement_timeout = 0;
 CREATE TABLE platform_sale_fees (
     platform_sale_fee_id BIGSERIAL PRIMARY KEY,
     auction_id VARCHAR(40) NOT NULL REFERENCES auctions(auction_id) ON DELETE CASCADE,
-    seller_id VARCHAR(13) NOT NULL,
-    winner_user_id VARCHAR(13) NOT NULL,
+    seller_id UUID NOT NULL,
+    winner_user_id UUID NOT NULL,
     winner_escrow_amount BIGINT NOT NULL CHECK (winner_escrow_amount > 0),
     seller_share_amount BIGINT NOT NULL CHECK (seller_share_amount >= 0),
     platform_fee_amount BIGINT NOT NULL CHECK (platform_fee_amount >= 0),

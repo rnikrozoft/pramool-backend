@@ -1,31 +1,50 @@
 package mapping
 
 import (
+	"math"
 	"strings"
+	"time"
 
 	"github.com/rnikrozoft/pramool-core/model/dto"
 	"github.com/rnikrozoft/pramool-core/model/entity"
 )
 
+func creditDebtBaht(credit int64) int64 {
+	if credit < 0 {
+		return -credit
+	}
+	return 0
+}
+
 // WithdrawalBlockedFromCounts builds withdrawal gating for GET /users (ถอนเงิน).
-func WithdrawalBlockedFromCounts(sellerN, buyerN int) (blocked bool, reason string) {
-	if sellerN == 0 && buyerN == 0 {
+func WithdrawalBlockedFromCounts(pendingSellerShip int) (blocked bool, reason string) {
+	if pendingSellerShip == 0 {
 		return false, ""
 	}
-	var parts []string
-	if sellerN > 0 {
-		parts = append(parts, "กรุณาบันทึกการจัดส่งสินค้าให้ครบในฐานะผู้ขาย")
+	return true, "กรุณาบันทึกการจัดส่งสินค้าให้ครบในฐานะผู้ขาย ก่อนจึงจะถอนเงินได้"
+}
+
+func sellerReviewAvgRating(starPoints int64, reviewCount int) float64 {
+	if reviewCount <= 0 {
+		return 0
 	}
-	if buyerN > 0 {
-		parts = append(parts, "กรุณายืนยันรับของให้ครบในฐานะผู้ชนะประมูล")
+	avg := float64(starPoints) / float64(reviewCount) / 2.0
+	if avg < 0 {
+		avg = 0
 	}
-	return true, strings.Join(parts, " และ ") + " ก่อนจึงจะถอนเงินได้"
+	if avg > 5 {
+		avg = 5
+	}
+	return math.Round(avg*10) / 10
 }
 
 // ToUserProfileResponse maps a user row to the profile API shape.
-func ToUserProfileResponse(u entity.User, withdrawalBlocked bool, withdrawalReason string, pendingSellerShip int) dto.UserProfileResponse {
-	return dto.UserProfileResponse{
+func ToUserProfileResponse(u entity.User, withdrawalBlocked bool, withdrawalReason string, pendingSellerShip int, appealPending bool, appealStatus string, unreadNotifications int) dto.UserProfileResponse {
+	restricted := u.RestrictedUntil != nil && u.RestrictedUntil.After(time.Now())
+	postingRestricted := u.PostingRestrictedUntil != nil && u.PostingRestrictedUntil.After(time.Now())
+	resp := dto.UserProfileResponse{
 		UserID:                u.UserID,
+		NationalID:            u.NationalID,
 		Tel:                   u.Tel,
 		FirstName:             u.FirstName,
 		LastName:              u.LastName,
@@ -43,10 +62,33 @@ func ToUserProfileResponse(u entity.User, withdrawalBlocked bool, withdrawalReas
 		BankAccountName:       u.BankAccountName,
 		BankAccountNumber:     u.BankAccountNumber,
 		Credit:                u.Credit,
+		HasCreditDebt:         u.Credit < 0,
+		CreditDebtBaht:        creditDebtBaht(u.Credit),
 		WithdrawalBlocked:        withdrawalBlocked,
 		WithdrawalBlockReason:    withdrawalReason,
 		PendingSellerShipCount: pendingSellerShip,
+		AccountRestricted:       restricted,
+		PostingRestricted:       postingRestricted,
+		ReputationPoints:        u.ReputationPoints,
+		SellerReviewAvgRating:   sellerReviewAvgRating(u.ReputationPoints, u.SellerReviewCount),
+		SellerReviewCount:       u.SellerReviewCount,
+		AppealPending:           appealPending,
+		AppealStatus:            appealStatus,
+		UnreadNotificationCount: unreadNotifications,
 	}
+	if restricted && u.RestrictedUntil != nil {
+		resp.RestrictedUntil = u.RestrictedUntil.Format(time.RFC3339)
+	}
+	if strings.TrimSpace(u.RestrictedReason) != "" {
+		resp.RestrictedReason = strings.TrimSpace(u.RestrictedReason)
+	}
+	if postingRestricted && u.PostingRestrictedUntil != nil {
+		resp.PostingRestrictedUntil = u.PostingRestrictedUntil.Format(time.RFC3339)
+	}
+	if strings.TrimSpace(u.PostingRestrictedReason) != "" {
+		resp.PostingRestrictedReason = strings.TrimSpace(u.PostingRestrictedReason)
+	}
+	return resp
 }
 
 // UpdateProfileRequestToEntity maps PUT body + JWT subject to a profile update row.

@@ -133,10 +133,13 @@ SQL ทั้งหมดอยู่ที่ `pramool-core/migrations/` แย
 
 | `--db` | โฟลเดอร์ SQL | ตารางหลัก |
 |--------|--------------|-----------|
-| `core` | `migrations/core/` | `tel_verify`, `banks`, `users`, `provinces`, `districts`, `subdistricts` |
+| `core` | `migrations/core/` | users, geo, categories, PDPA, notifications, appeals, … |
 | `wallet` | `migrations/wallet/` | `transactions`, `withdrawals` |
-| `auction` | `migrations/auction/` | `auctions`, `auction_*`, `bid_transactions`, `platform_sale_fees` |
-| `all` | ทั้ง 3 โฟลเดอร์ | ใช้ตอน setup / deploy |
+| `auction` | `migrations/auction/` | auctions, bids, reports, fees, … |
+| `admin` | `migrations/admin/` | platform_settings, announcements, admin moderation, … |
+| `all` | ทั้ง 4 โฟลเดอร์ (เรียง timestamp รวม) | **ใช้ตอน setup / deploy** |
+
+ทุก service ใช้ `DATABASE_NAME` / `DATABASE_DSN` ชี้ database เดียว — migrate ครั้งเดียวที่ repo นี้
 
 ทุก service (`pramool-core`, `wallet`, `auction`) ใช้ `DATABASE_NAME` / `DATABASE_DSN` ชี้ database เดียวกัน
 

@@ -4,7 +4,7 @@ SET statement_timeout = 0;
 
 CREATE TABLE withdrawals (
     withdrawal_id BIGSERIAL PRIMARY KEY,
-    user_id VARCHAR(13) NOT NULL,
+    user_id UUID NOT NULL,
     amount BIGINT NOT NULL CHECK (amount > 0),
     fee_amount BIGINT NOT NULL DEFAULT 0,
     transfer_amount BIGINT NOT NULL DEFAULT 0,

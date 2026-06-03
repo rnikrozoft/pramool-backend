@@ -4,8 +4,8 @@ SET statement_timeout = 0;
 
 CREATE TABLE auction_seller_reviews (
     auction_id VARCHAR(40) PRIMARY KEY REFERENCES auctions(auction_id) ON DELETE CASCADE,
-    buyer_user_id VARCHAR(13) NOT NULL,
-    seller_id VARCHAR(13) NOT NULL,
+    buyer_user_id UUID NOT NULL,
+    seller_id UUID NOT NULL,
     rating NUMERIC(3, 1) NOT NULL,
     seller_points INT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),

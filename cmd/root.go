@@ -62,7 +62,9 @@ func init() {
 			APIKey:         os.Getenv("API_KEY"),
 			APISecret:      os.Getenv("API_SECRET"),
 		},
-		CorsAllowOrigins: os.Getenv("CORS_ALLOW_ORIGINS"),
+		CorsAllowOrigins:   os.Getenv("CORS_ALLOW_ORIGINS"),
+		TrackingMoreAPIKey: os.Getenv("TRACKINGMORE_API_KEY"),
+		NationalIDEncKey:   os.Getenv("NATIONAL_ID_ENCRYPTION_KEY"),
 	}
 
 	dsn := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable",

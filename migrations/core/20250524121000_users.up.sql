@@ -2,8 +2,14 @@ SET statement_timeout = 0;
 
 --bun:split
 
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+--bun:split
+
 CREATE TABLE users (
-    user_id VARCHAR(13) PRIMARY KEY,
+    user_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    national_id_hash VARCHAR(64) UNIQUE,
+    national_id_enc TEXT,
     tel VARCHAR(10) NOT NULL REFERENCES tel_verify(tel),
     first_name VARCHAR(20) NOT NULL,
     last_name VARCHAR(20) NOT NULL,
@@ -25,6 +31,12 @@ CREATE TABLE users (
     omise_recipient_id TEXT,
     seller_review_points_total BIGINT NOT NULL DEFAULT 0,
     seller_review_count INT NOT NULL DEFAULT 0,
+    deleted_at TIMESTAMPTZ,
+    anonymized_at TIMESTAMPTZ,
+    marketing_opt_in BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+CREATE UNIQUE INDEX idx_users_national_id_hash ON users (national_id_hash) WHERE national_id_hash IS NOT NULL;
+CREATE INDEX idx_users_deleted_at ON users (deleted_at) WHERE deleted_at IS NOT NULL;

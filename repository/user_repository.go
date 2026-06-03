@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/rnikrozoft/pramool-core/internal/money"
+	"github.com/rnikrozoft/pramool-core/internal/nationalid"
 	"github.com/rnikrozoft/pramool-core/model/entity"
 	"github.com/uptrace/bun"
 )
@@ -28,8 +29,9 @@ type UserRepository interface {
 	FindByID(ctx context.Context, userID string) (*entity.User, error)
 	Upsert(ctx context.Context, u *entity.User) error
 	IsTelAlreadyUsed(ctx context.Context, tel string) (bool, error)
-	// ExistsRegisteredUserID is true when users.user_id already exists (national ID taken).
-	ExistsRegisteredUserID(ctx context.Context, userID string) (bool, error)
+	// ExistsRegisteredNationalID is true when users.national_id_hash already exists.
+	ExistsRegisteredNationalID(ctx context.Context, nationalID string) (bool, error)
+	GetDecryptedNationalID(ctx context.Context, userID string) (string, error)
 	// IsEmailTakenByOtherTel is true if email is used on another account (users or tel_verify with a different tel).
 	IsEmailTakenByOtherTel(ctx context.Context, email, requestTel string) (bool, error)
 	IsTelUsedByOtherUser(ctx context.Context, userID, tel string) (bool, error)
@@ -40,13 +42,23 @@ type UserRepository interface {
 	UpdateProfile(ctx context.Context, p entity.ProfileUpdate) error
 
 	// CountUserFulfillmentBlocks counts escrow obligations used only for withdrawal gating (GET /users).
-	CountUserFulfillmentBlocks(ctx context.Context, userID string) (pendingSellerShip int, pendingBuyerConfirm int, err error)
+	CountUserFulfillmentBlocks(ctx context.Context, userID string) (pendingSellerShip int, err error)
 
 	// GetLoginPasswordHash returns stored bcrypt hash for tel (users row preferred, else tel_verify).
 	GetLoginPasswordHash(ctx context.Context, tel string) (hash string, err error)
 
+	// UpdatePasswordHashByTel updates password_hash on tel_verify and users (if any) for the tel.
+	UpdatePasswordHashByTel(ctx context.Context, tel, passwordHash string) error
+
 	// FindTelByEmail returns the phone linked to email (users.email, else tel_verify.signup_email).
 	FindTelByEmail(ctx context.Context, email string) (tel string, err error)
+
+	IsUserSuspended(ctx context.Context, subject string) (bool, error)
+
+	IsUserRestricted(ctx context.Context, userID string) (bool, error)
+	InsertRestrictionAppeal(ctx context.Context, userID, reason string) (int64, error)
+	GetRestrictionAppealForUser(ctx context.Context, userID string) (*RestrictionAppealRow, error)
+	HasPendingRestrictionAppeal(ctx context.Context, userID string) (bool, error)
 }
 
 type user struct {
@@ -66,11 +78,13 @@ func (r user) FindByTel(ctx context.Context, tel string) (*entity.User, error) {
 
 func (r user) FindTelVerifyByTel(ctx context.Context, tel string) (*entity.TelVerify, error) {
 	tv := new(entity.TelVerify)
+	tel = strings.TrimSpace(tel)
 	query := `
 		SELECT tel,
 		       COALESCE(signup_first_name, '') AS signup_first_name,
-		       COALESCE(signup_last_name, '') AS signup_last_name
-		FROM tel_verify WHERE tel = ?`
+		       COALESCE(signup_last_name, '') AS signup_last_name,
+		       COALESCE(signup_email, '') AS signup_email
+		FROM tel_verify WHERE TRIM(tel) = ?`
 	err := r.bun.NewRaw(query, tel).Scan(ctx, tv)
 	return tv, err
 }
@@ -132,7 +146,7 @@ func (r user) FindUserIDByTel(ctx context.Context, tel string) (string, error) {
 func (r user) FindByID(ctx context.Context, userID string) (*entity.User, error) {
 	u := new(entity.User)
 	err := r.bun.NewRaw(`
-		SELECT user_id, tel,
+		SELECT user_id, COALESCE(national_id_enc, '') AS national_id_enc, tel,
 		       COALESCE(first_name, '') AS first_name,
 		       COALESCE(last_name, '') AS last_name,
 		       COALESCE(address_primary, '') AS address_primary,
@@ -149,19 +163,51 @@ func (r user) FindByID(ctx context.Context, userID string) (*entity.User, error)
 		       COALESCE(bank_account_name, '') AS bank_account_name,
 		       COALESCE(bank_account_number, '') AS bank_account_number,
 		       COALESCE(credit, 0) AS credit,
+		       COALESCE(reputation_points, 0) AS reputation_points,
+		       COALESCE(seller_review_rating_points_total, 0) AS seller_review_rating_points_total,
+		       COALESCE(seller_review_count, 0) AS seller_review_count,
+		       restricted_until,
+		       COALESCE(restricted_reason, '') AS restricted_reason,
+		       posting_restricted_until,
+		       COALESCE(posting_restricted_reason, '') AS posting_restricted_reason,
 		       created_at, updated_at
 		FROM users WHERE user_id = ?
 	`, userID).Scan(ctx, u)
-	return u, err
+	if err != nil {
+		return u, err
+	}
+	if plain, derr := nationalid.Decrypt(u.NationalIDEnc); derr == nil {
+		u.NationalID = plain
+	}
+	return u, nil
+}
+
+func (r user) GetDecryptedNationalID(ctx context.Context, userID string) (string, error) {
+	var enc sql.NullString
+	err := r.bun.NewRaw(`SELECT national_id_enc FROM users WHERE user_id = ?`, strings.TrimSpace(userID)).Scan(ctx, &enc)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", sql.ErrNoRows
+	}
+	if err != nil {
+		return "", err
+	}
+	if !enc.Valid || strings.TrimSpace(enc.String) == "" {
+		return "", nil
+	}
+	return nationalid.Decrypt(enc.String)
 }
 
 func (r user) Upsert(ctx context.Context, u *entity.User) error {
-	_, err := r.bun.NewRaw(`
+	hash, enc, err := nationalid.PrepareStorage(u.NationalID)
+	if err != nil {
+		return err
+	}
+	_, err = r.bun.NewRaw(`
 		INSERT INTO users (
-			user_id, tel, email, facebook, first_name, last_name,
+			national_id_hash, national_id_enc, tel, email, facebook, first_name, last_name,
 			address_primary, address, soi, road, sub_district, district, province, zip_code
 		)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 		ON CONFLICT (user_id) DO UPDATE SET
 			email = EXCLUDED.email,
 			facebook = EXCLUDED.facebook,
@@ -176,7 +222,7 @@ func (r user) Upsert(ctx context.Context, u *entity.User) error {
 			province = EXCLUDED.province,
 			zip_code = EXCLUDED.zip_code,
 			updated_at = NOW()
-	`, u.UserID, u.Tel, u.Email, u.Facebook, u.FirstName, u.LastName,
+	`, hash, enc, u.Tel, u.Email, u.Facebook, u.FirstName, u.LastName,
 		u.AddressPrimary, u.Address, u.Soi, u.Road, u.SubDistrict, u.District, u.Province, u.ZipCode).Exec(ctx)
 	return err
 }
@@ -188,13 +234,13 @@ func (r user) IsTelAlreadyUsed(ctx context.Context, tel string) (bool, error) {
 	return exists, err
 }
 
-func (r user) ExistsRegisteredUserID(ctx context.Context, userID string) (bool, error) {
-	userID = strings.TrimSpace(userID)
-	if userID == "" {
+func (r user) ExistsRegisteredNationalID(ctx context.Context, nationalID string) (bool, error) {
+	nationalID = strings.TrimSpace(nationalID)
+	if nationalID == "" {
 		return false, nil
 	}
 	var exists bool
-	err := r.bun.NewRaw(`SELECT EXISTS(SELECT 1 FROM users WHERE user_id = ?)`, userID).Scan(ctx, &exists)
+	err := r.bun.NewRaw(`SELECT EXISTS(SELECT 1 FROM users WHERE national_id_hash = ?)`, nationalid.Hash(nationalID)).Scan(ctx, &exists)
 	return exists, err
 }
 
@@ -236,12 +282,16 @@ func (r user) IsTelUsedByOtherUser(ctx context.Context, userID, tel string) (boo
 }
 
 func (r user) HasUserRecordForSubject(ctx context.Context, subject string) (bool, error) {
+	subject = strings.TrimSpace(subject)
+	if subject == "" {
+		return false, nil
+	}
 	var exists bool
-	err := r.bun.NewRaw(`
-		SELECT EXISTS(
-			SELECT 1 FROM users WHERE user_id = ? OR tel = ?
-		)
-	`, subject, subject).Scan(ctx, &exists)
+	if SubjectIsUserUUID(subject) {
+		err := r.bun.NewRaw(`SELECT EXISTS(SELECT 1 FROM users WHERE user_id = ?)`, subject).Scan(ctx, &exists)
+		return exists, err
+	}
+	err := r.bun.NewRaw(`SELECT EXISTS(SELECT 1 FROM users WHERE TRIM(tel) = ?)`, subject).Scan(ctx, &exists)
 	return exists, err
 }
 
@@ -330,24 +380,19 @@ func (r user) UpdateProfile(ctx context.Context, p entity.ProfileUpdate) error {
 	return nil
 }
 
-func (r user) CountUserFulfillmentBlocks(ctx context.Context, userID string) (pendingSellerShip int, pendingBuyerConfirm int, err error) {
+func (r user) CountUserFulfillmentBlocks(ctx context.Context, userID string) (pendingSellerShip int, err error) {
 	query := `
 	SELECT
 		(SELECT COUNT(*)::int FROM auctions a
 		 WHERE a.status = 'closed'
 		   AND a.seller_payout_at IS NULL
-		   AND COALESCE(NULLIF(TRIM(a.winner_id), ''), '') <> ''
+		   AND a.winner_id IS NOT NULL
 		   AND a.seller_id = ?
-		   AND a.seller_shipped_at IS NULL),
-		(SELECT COUNT(*)::int FROM auctions a
-		 WHERE a.status = 'closed'
-		   AND a.seller_payout_at IS NULL
-		   AND COALESCE(NULLIF(TRIM(a.winner_id), ''), '') <> ''
-		   AND a.winner_id = ?
-		   AND a.buyer_received_at IS NULL)
+		   AND a.seller_shipped_at IS NULL
+		   AND a.buyer_escrow_refunded_at IS NULL)
 	`
-	err = r.bun.NewRaw(query, userID, userID).Scan(ctx, &pendingSellerShip, &pendingBuyerConfirm)
-	return pendingSellerShip, pendingBuyerConfirm, err
+	err = r.bun.NewRaw(query, userID).Scan(ctx, &pendingSellerShip)
+	return pendingSellerShip, err
 }
 
 func (r user) FindTelByEmail(ctx context.Context, email string) (string, error) {
@@ -407,4 +452,26 @@ func (r user) GetLoginPasswordHash(ctx context.Context, tel string) (string, err
 		return strings.TrimSpace(tHash.String), nil
 	}
 	return "", nil
+}
+
+func (r user) UpdatePasswordHashByTel(ctx context.Context, tel, passwordHash string) error {
+	tel = strings.TrimSpace(tel)
+	passwordHash = strings.TrimSpace(passwordHash)
+	if tel == "" || passwordHash == "" {
+		return errors.New("invalid password update")
+	}
+	_, err := r.bun.NewRaw(`
+		UPDATE tel_verify
+		SET password_hash = ?, updated_at = NOW()
+		WHERE tel = ?
+	`, passwordHash, tel).Exec(ctx)
+	if err != nil {
+		return err
+	}
+	_, err = r.bun.NewRaw(`
+		UPDATE users
+		SET password_hash = ?
+		WHERE tel = ?
+	`, passwordHash, tel).Exec(ctx)
+	return err
 }

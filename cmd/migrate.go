@@ -17,14 +17,15 @@ var migrateDB string
 var migrateCmd = &cobra.Command{
 	Use:   "migrate",
 	Short: "Apply pending database migrations",
-	Long: `Apply SQL migrations from pramool-core/migrations/{core,wallet,auction}/.
+	Long: `Apply SQL migrations from pramool-core/migrations/{core,wallet,auction,admin}/.
 All targets use the same PostgreSQL database (DATABASE_NAME / DATABASE_DSN).
 
 Examples:
   go run . migrate --db core
   go run . migrate --db wallet
   go run . migrate --db auction
-  go run . migrate --db all    # core + wallet + auction SQL on one database`,
+  go run . migrate --db admin
+  go run . migrate --db all    # everything (recommended for fresh install)`,
 	Run: func(cmd *cobra.Command, args []string) {
 		ctx := context.Background()
 		target := migrateDB
@@ -62,6 +63,6 @@ func runMigrate(ctx context.Context, cmd *cobra.Command, target string) error {
 }
 
 func init() {
-	migrateCmd.Flags().StringVar(&migrateDB, "db", migrations.DBAll, "database: core, wallet, auction, or all")
+	migrateCmd.Flags().StringVar(&migrateDB, "db", migrations.DBAll, "database: core, wallet, auction, admin, or all")
 	rootCmd.AddCommand(migrateCmd)
 }

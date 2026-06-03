@@ -9,8 +9,9 @@ const (
 )
 
 type CustomClaims struct {
-	UserID   string `json:"user_id,omitempty"`
-	LoggedIn bool   `json:"logged_in,omitempty"`
-	TokenUse string `json:"token_use,omitempty"` // "access" | "refresh"; omit => treated as access (legacy)
+	UserID     string `json:"user_id,omitempty"`
+	LoggedIn   bool   `json:"logged_in,omitempty"`
+	TokenUse   string `json:"token_use,omitempty"` // "access" | "refresh"; omit => treated as access (legacy)
+	RememberMe bool   `json:"remember_me,omitempty"`
 	jwt.RegisteredClaims
 }

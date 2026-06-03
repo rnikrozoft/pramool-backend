@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
@@ -8,8 +9,13 @@ import (
 	"github.com/rnikrozoft/pramool-core/model"
 )
 
+type UserSuspensionChecker interface {
+	IsUserSuspended(ctx context.Context, subject string) (bool, error)
+}
+
 type Middleware struct {
-	JWTSecret string
+	JWTSecret         string
+	SuspensionChecker UserSuspensionChecker
 }
 
 // JWTMiddleware validates access_token cookie and sets Locals "user_id".

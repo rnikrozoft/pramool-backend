@@ -17,15 +17,15 @@ var rollbackCmd = &cobra.Command{
 	Short: "Roll back the last applied database migration group",
 	Run: func(cmd *cobra.Command, args []string) {
 		ctx := context.Background()
-		db, label, err := openMigrateDB(migrateDB)
+		db, label, err := openMigrateDB(rollbackDB)
 		if err != nil {
 			panic(err)
 		}
 		defer db.Close()
 
-		fmt.Fprintf(cmd.OutOrStdout(), "rollback target: %s (db=%s)\n", label, migrateDB)
+		fmt.Fprintf(cmd.OutOrStdout(), "rollback target: %s (db=%s)\n", label, rollbackDB)
 		fmt.Fprintln(cmd.OutOrStdout(), "            (bun tracks applied files in table bun_migrations)")
-		group, err := migrations.Rollback(ctx, db, migrateDB)
+		group, err := migrations.Rollback(ctx, db, rollbackDB)
 		if err != nil {
 			panic(err)
 		}
@@ -37,7 +37,9 @@ var rollbackCmd = &cobra.Command{
 	},
 }
 
+var rollbackDB string
+
 func init() {
-	rollbackCmd.Flags().StringVar(&migrateDB, "db", migrations.DBCore, "database: core, wallet, auction, or all")
+	rollbackCmd.Flags().StringVar(&rollbackDB, "db", migrations.DBCore, "database: core, wallet, auction, admin, or all")
 	rootCmd.AddCommand(rollbackCmd)
 }

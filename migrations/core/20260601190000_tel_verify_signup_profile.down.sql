@@ -1,0 +1,1 @@
+-- Columns shared with initial tel_verify schema; no-op on rollback.

@@ -40,11 +40,11 @@ func (service register) TelVerifyHasPassword(ctx context.Context, tel string) (b
 }
 
 func (service register) RegisterUser(ctx context.Context, user entity.User) error {
-	user.UserID = strings.TrimSpace(user.UserID)
+	user.NationalID = strings.TrimSpace(user.NationalID)
 	user.Tel = strings.TrimSpace(user.Tel)
 	user.Email = strings.TrimSpace(user.Email)
 
-	idTaken, err := service.userService.ExistsRegisteredUserID(ctx, user.UserID)
+	idTaken, err := service.userService.ExistsRegisteredNationalID(ctx, user.NationalID)
 	if err != nil {
 		return err
 	}

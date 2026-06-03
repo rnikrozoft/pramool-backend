@@ -38,6 +38,14 @@ for spec in "${SERVICES[@]}"; do
     if [[ "$service_dir" == "pramool-auction-service" ]]; then
       export PRAMOOL_UPLOAD_ROOT="$BASE_DIR/pramool-core"
     fi
+    # Shared secrets/config (JWT, DB, TRACKINGMORE_API_KEY, …) live in pramool-core/.env.
+    # Service-specific .env overrides when the same key is set in both files.
+    if [[ -f "$BASE_DIR/pramool-core/.env" ]]; then
+      set -a
+      # shellcheck disable=SC1091
+      source "$BASE_DIR/pramool-core/.env"
+      set +a
+    fi
     if [[ -f ".env" ]]; then
       set -a
       # shellcheck disable=SC1091

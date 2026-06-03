@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/rnikrozoft/pramool-core/model/entity"
+	"github.com/rnikrozoft/pramool-core/internal/nationalid"
 	"github.com/uptrace/bun"
 )
 
@@ -61,13 +62,18 @@ func (r register) RegisterTelIfNotExist(ctx context.Context, tel string) error {
 func (r register) RegisterUserWithTx(ctx context.Context, tx bun.Tx, user entity.User) error {
 	query := `
 	INSERT INTO users (
-		user_id, tel, email, facebook, bank_id, bank_account_name, bank_account_number,
+		national_id_hash, national_id_enc, tel, email, facebook, bank_id, bank_account_name, bank_account_number,
 		first_name, last_name, address_primary, address, soi, road, sub_district, district, province, zip_code,
 		password_hash
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
-	_, err := tx.NewRaw(query,
-		user.UserID,
+	hash, enc, err := nationalid.PrepareStorage(user.NationalID)
+	if err != nil {
+		return err
+	}
+	_, err = tx.NewRaw(query,
+		nullIfEmpty(hash),
+		nullIfEmpty(enc),
 		user.Tel,
 		user.Email,
 		user.Facebook,
@@ -104,7 +110,8 @@ func (r register) UpsertTelVerifySignup(ctx context.Context, firstName, lastName
 			signup_first_name = EXCLUDED.signup_first_name,
 			signup_last_name = EXCLUDED.signup_last_name,
 			signup_email = EXCLUDED.signup_email,
-			password_hash = EXCLUDED.password_hash
+			password_hash = EXCLUDED.password_hash,
+			updated_at = NOW()
 	`, tel, firstName, lastName, email, passwordHash).Exec(ctx)
 	return err
 }

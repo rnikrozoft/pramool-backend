@@ -5,7 +5,7 @@ SET statement_timeout = 0;
 CREATE TABLE transactions (
     transaction_id BIGSERIAL PRIMARY KEY,
     charge_id VARCHAR(255) NOT NULL UNIQUE,
-    user_id VARCHAR(13) NOT NULL,
+    user_id UUID NOT NULL,
     amount BIGINT NOT NULL,
     fee_amount BIGINT NOT NULL DEFAULT 0,
     credit_amount BIGINT NOT NULL DEFAULT 0,
