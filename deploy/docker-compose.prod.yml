@@ -127,6 +127,8 @@ services:
   pramool-frontend:
     container_name: pramool-frontend
     image: ${REGISTRY_HOST}/pramool-frontend:${IMAGE_TAG:-latest}
+    environment:
+      USER_API_BASE_URL: http://pramool-core:3001
     ports:
       - "${FRONTEND_PORT:-3000}:3000"
     depends_on:
